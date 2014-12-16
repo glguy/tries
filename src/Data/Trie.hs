@@ -71,26 +71,6 @@ type instance IxValue (Trie k a) = a
 -- All operations can be automatically derived when
 -- the associated 'Trie' type is a /newtype/ of 'GenericTrie'.
 class TrieKey k where
-  --
-  -- @
-  -- Instances
-  -- 'TrieKey' k => 'Functor'                ('Trie' k)
-  -- 'TrieKey' k => 'Foldable'               ('Trie' k)
-  -- 'TrieKey' k => 'Traversable'            ('Trie' k)
-  -- 'TrieKey' k => 'TraversableWithIndex' k ('Trie' k)
-  -- 'TrieKey' k => 'FunctorWithIndex'     k ('Trie' k)
-  -- 'TrieKey' k => 'FoldableWithIndex'    k ('Trie' k)
-  --
-  -- ('Semigroup' a, 'TrieKey' k) => 'Monoid'    ('Trie' k a)
-  -- ('Semigroup' a, 'TrieKey' k) => 'Semigroup' ('Trie' k a)
-  --
-  -- ('Eq' a, 'TrieKey' k) => 'Eq' ('Trie' k a)
-  --
-  -- 'Index'   ('Trie' k a) = k
-  -- 'IxValue' ('Trie' k a) = a
-  -- 'TrieKey' k => 'At'   ('Trie' k a)
-  -- 'TrieKey' k => 'Ixed' ('Trie' k a)
-  -- @
 
   -- | Returns 'True' when the 'Trie' contains no values.
   trieNull  :: Trie k a -> Bool
@@ -105,7 +85,6 @@ class TrieKey k where
   trieEmpty :: Trie k a
   default trieEmpty ::
     ( GTrieKey (Rep k)
-    , Generic k
     , Coercible (Trie k a) (GTrie (Rep k) a)
     ) => Trie k a
   trieEmpty = genericTrieEmpty
@@ -299,10 +278,10 @@ genericTrieNull ::
   Trie k a -> Bool
 genericTrieNull = coerceWith (sym Coercion) (gtrieNull :: GTrie (Rep k) a -> Bool)
 
+
 genericTrieEmpty ::
   forall k a.
-  ( Generic k
-  , GTrieKey (Rep k)
+  ( GTrieKey (Rep k)
   , Coercible (Trie k a) (GTrie (Rep k) a)
   ) =>
   Trie k a
