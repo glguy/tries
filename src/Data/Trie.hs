@@ -40,7 +40,7 @@ import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
 import Data.Monoid
-import Data.Traversable (Traversable(..), fmapDefault, foldMapDefault)
+import Data.Traversable (fmapDefault, foldMapDefault)
 import Data.Type.Coercion
 import GHC.Generics
 import qualified Data.IntMap as IntMap
@@ -175,22 +175,22 @@ instance TrieKey Bool where
 
 
 instance TrieKey k => TrieKey (Maybe k) where
-  newtype Trie (Maybe k) a = MaybeTrie { unMaybeTrie :: GenericTrie (Maybe k) a }
+  newtype Trie (Maybe k) a = MaybeTrie (GenericTrie (Maybe k) a)
 
 
 
 instance (TrieKey k1, TrieKey k2) => TrieKey (Either k1 k2) where
-  newtype Trie (Either k1 k2) a = EitherTrie { unEitherTrie :: GenericTrie (Either k1 k2) a }
+  newtype Trie (Either k1 k2) a = EitherTrie (GenericTrie (Either k1 k2) a)
 
 
 
 instance (TrieKey k1, TrieKey k2) => TrieKey (k1,k2) where
-  newtype Trie (k1,k2) a = Tuple2Trie { unTuple2Trie :: GenericTrie (k1,k2) a }
+  newtype Trie (k1,k2) a = Tuple2Trie (GenericTrie (k1,k2) a)
 
 
 
 instance TrieKey k => TrieKey [k] where
-  newtype Trie [k] a = ListTrie { unListTrie :: GenericTrie [k] a }
+  newtype Trie [k] a = ListTrie (GenericTrie [k] a)
 
 
 genericTrieNull ::
@@ -231,14 +231,6 @@ genericTrieAt ::
   ) =>
   k -> Lens' (Trie k a) (Maybe a)
 genericTrieAt k = iso Data.Coerce.coerce (coerceWith (sym Coercion)) . gtrieAt (GHC.Generics.from k)
-
-
-genericTrieLens ::
-  (Generic k, GTrieKey (Rep k)) =>
-  (Trie k a -> GTrie (Rep k) a) ->
-  (GTrie (Rep k) a -> Trie k a) ->
-  k -> Lens' (Trie k a) (Maybe a)
-genericTrieLens f g k = iso f g . gtrieAt (GHC.Generics.from k)
 
 
 genericTrieITraverse ::
@@ -371,6 +363,3 @@ instance TrieKey k => FoldableWithIndex    k (Trie k) where
 instance TrieKey k => TraversableWithIndex k (Trie k) where
   itraverse  = trieITraverse . Indexed
   itraversed = trieITraverse
-
-foldFromFoldMap :: (Applicative f, Contravariant f) => ((a -> f a) -> s -> f a) -> (a -> f a) -> s -> f s
-foldFromFoldMap myFoldMap f s = Control.Lens.coerce (myFoldMap f s)
