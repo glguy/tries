@@ -50,6 +50,9 @@ import qualified Data.Foldable as Foldable
 
 
 -- | Keys that support prefix-trie map operations.
+--
+-- All operations can be automatically derived when
+-- the associated 'Trie' type is a /newtype/ of 'GenericTrie'.
 class TrieKey k where
   -- | Associated datatype of tries indexable by keys of type @k@.
   --
@@ -114,8 +117,8 @@ class TrieKey k where
      IndexedTraversal k (Trie k a) (Trie k b) a b
   trieITraverse = genericTrieITraverse
 
-  -- | Implementation of the 'Monoid' 'mappend' function used in the 'Monoid'
-  -- instance for 'Trie'.
+  -- | Implementation of the append operation used in
+  -- the 'Semigroup' and 'Monoid' instances for 'Trie'.
   trieAppend :: Semigroup a => Trie k a -> Trie k a -> Trie k a
   default trieAppend ::
      ( GTrieKey (Rep k)
