@@ -65,6 +65,8 @@ class TrieKey k where
   -- ('Semigroup' a, 'TrieKey' k) => 'Monoid'    ('Trie' k a)
   -- ('Semigroup' a, 'TrieKey' k) => 'Semigroup' ('Trie' k a)
   --
+  -- ('Eq' a, 'TrieKey' k) => 'Eq' ('Trie' k a)
+  --
   -- 'Index'   ('Trie' k a) = k
   -- 'IxValue' ('Trie' k a) = a
   -- 'TrieKey' k => 'At'   ('Trie' k a)
@@ -385,3 +387,11 @@ instance TrieKey k => FoldableWithIndex    k (Trie k) where
 instance TrieKey k => TraversableWithIndex k (Trie k) where
   itraverse  = trieITraverse . Indexed
   itraversed = trieITraverse
+
+instance (Eq a, TrieKey k) => Eq (Trie k a) where
+  x == y = Foldable.all isGoodMatch (start x <> start y)
+    where
+    start = fmap (\x -> [x])
+
+    isGoodMatch [a,b] = a == b
+    isGoodMatch _     = False
