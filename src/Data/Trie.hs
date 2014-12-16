@@ -236,7 +236,7 @@ instance TrieKey Word64 where
 
 newtype instance Trie Integer a = IntegerTrie (Map Integer a)
 instance TrieKey Integer where
-  trieAt k                        = iso (\(IntegerTrie t) -> t) IntegerTrie . at k
+  trieAt k f (IntegerTrie x)      = fmap IntegerTrie (at k f x)
   trieNull (IntegerTrie x)        = Map.null x
   trieEmpty                       = IntegerTrie Map.empty
   trieITraverse f (IntegerTrie x) = fmap IntegerTrie (itraversed f x)
@@ -245,7 +245,7 @@ instance TrieKey Integer where
 
 newtype instance Trie Char a = CharTrie (IntMap a)
 instance TrieKey Char where
-  trieAt k                     = iso (\(CharTrie t) -> t) CharTrie . at (ord k)
+  trieAt k f (CharTrie x)      = fmap CharTrie (at (ord k) f x)
   trieNull (CharTrie x)        = IntMap.null x
   trieEmpty                    = CharTrie IntMap.empty
   trieITraverse f (CharTrie x) = fmap CharTrie (reindexed chr itraversed f x)
@@ -366,6 +366,7 @@ class GTrieKey f where
 
 mtrieIso :: Iso (GTrie (M1 i c f) a) (GTrie (M1 i c f) b) (GTrie f a) (GTrie f b)
 mtrieIso = iso (\(MTrie p) -> p) MTrie
+{-# INLINE mtrieIso #-}
 
 instance GTrieKey f => GTrieKey (M1 i c f) where
   newtype GTrie (M1 i c f) a = MTrie (GTrie f a)
@@ -385,6 +386,7 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
 
 ktrieIso :: Iso (GTrie (K1 i k) a) (GTrie (K1 i k') b) (Trie k a) (Trie k' b)
 ktrieIso = iso (\(KTrie p) -> p) KTrie
+{-# INLINE ktrieIso #-}
 
 instance TrieKey k => GTrieKey (K1 i k) where
   newtype GTrie (K1 i k) a = KTrie (Trie k a)
@@ -404,6 +406,7 @@ instance TrieKey k => GTrieKey (K1 i k) where
 
 ptrieIso :: Iso (GTrie (f :*: g) a) (GTrie (f' :*: g') b) (GTrie f (GTrie g a)) (GTrie f' (GTrie g' b))
 ptrieIso = iso (\(PTrie p) -> p) PTrie
+{-# INLINE ptrieIso #-}
 
 instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   newtype GTrie (f :*: g) a = PTrie (GTrie f (GTrie g a))
@@ -425,7 +428,10 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
                      (\gk -> f (fk :*: gk))
                      (wrap fk g)
                      (wrap fk h)
-                     x y)) (under ptrieIso g) (under ptrieIso h) m n)
+                     x y))
+              (under ptrieIso g)
+              (under ptrieIso h)
+              m n)
 
     where
     noEmpty x
@@ -453,8 +459,8 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   gtrieEmpty                   = STrie gtrieEmpty gtrieEmpty
   gtrieNull (STrie m1 m2)      = gtrieNull m1 && gtrieNull m2
   gtrieMergeWithKey f g h (STrie m1 m2) (STrie n1 n2) =
-    STrie (coerceMergeWithKey gtrieMergeWithKey (f . L1) (wrapL g) (wrapL h) m1 n1)
-          (coerceMergeWithKey gtrieMergeWithKey (f . R1) (wrapR g) (wrapR h) m2 n2)
+    STrie (gtrieMergeWithKey (f . L1) (wrapL g) (wrapL h) m1 n1)
+          (gtrieMergeWithKey (f . R1) (wrapR g) (wrapR h) m2 n2)
     where
     wrapL t x = case t (STrie x gtrieEmpty) of
                   STrie x' _ -> x'
