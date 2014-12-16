@@ -60,6 +60,8 @@ class TrieKey k where
   -- 'TrieKey' k => 'FunctorWithIndex'     k ('Trie' k)
   -- 'TrieKey' k => 'FoldableWithIndex'    k ('Trie' k)
   --
+  -- ('Monoid' a, 'TrieKey' k) => 'Monoid' ('Trie' k a)
+  --
   -- 'Index'   ('Trie' k a) = k
   -- 'IxValue' ('Trie' k a) = a
   -- 'TrieKey' k => 'At'   ('Trie' k a)
@@ -177,17 +179,32 @@ instance TrieKey Bool where
 instance TrieKey k => TrieKey (Maybe k) where
   newtype Trie (Maybe k) a = MaybeTrie (GenericTrie (Maybe k) a)
 
+instance (TrieKey a, TrieKey b) => TrieKey (Either a b) where
+  newtype Trie (Either a b) v = EitherTrie (GenericTrie (Either a b) v)
 
+instance TrieKey () where
+  newtype Trie () v = Tuple0Trie (GenericTrie () v)
 
-instance (TrieKey k1, TrieKey k2) => TrieKey (Either k1 k2) where
-  newtype Trie (Either k1 k2) a = EitherTrie (GenericTrie (Either k1 k2) a)
+instance (TrieKey a, TrieKey b) => TrieKey (a,b) where
+  newtype Trie (a,b) v = Tuple2Trie (GenericTrie (a,b) v)
 
+instance (TrieKey a, TrieKey b, TrieKey c) => TrieKey (a,b,c) where
+  newtype Trie (a,b,c) v = Tuple3Trie (GenericTrie (a,b,c) v)
 
+instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d) => TrieKey (a,b,c,d) where
+  newtype Trie (a,b,c,d) v = Tuple4Trie (GenericTrie (a,b,c,d) v)
 
-instance (TrieKey k1, TrieKey k2) => TrieKey (k1,k2) where
-  newtype Trie (k1,k2) a = Tuple2Trie (GenericTrie (k1,k2) a)
+instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e) => TrieKey (a,b,c,d,e) where
+  newtype Trie (a,b,c,d,e) v = Tuple5Trie (GenericTrie (a,b,c,d,e) v)
 
+instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e, TrieKey f) => TrieKey (a,b,c,d,e,f) where
+  newtype Trie (a,b,c,d,e,f) v = Tuple6Trie (GenericTrie (a,b,c,d,e,f) v)
 
+instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e, TrieKey f, TrieKey g) => TrieKey (a,b,c,d,e,f,g) where
+  newtype Trie (a,b,c,d,e,f,g) v = Tuple7Trie (GenericTrie (a,b,c,d,e,f,g) v)
+
+instance TrieKey Ordering where
+  newtype Trie Ordering v = OrderingTrie (GenericTrie Ordering v)
 
 instance TrieKey k => TrieKey [k] where
   newtype Trie [k] a = ListTrie (GenericTrie [k] a)
