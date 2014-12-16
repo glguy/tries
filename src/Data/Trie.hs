@@ -50,7 +50,7 @@ import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
 import Data.Monoid (Monoid(..))
-import Data.Semigroup (Option(..), Semigroup(..))
+import Data.Semigroup (Semigroup(..))
 import Data.Traversable (fmapDefault, foldMapDefault)
 import Data.Type.Coercion
 import Data.Word
@@ -111,27 +111,33 @@ class TrieKey k where
      IndexedTraversal k (Trie k a) (Trie k b) a b
   trieITraverse = genericTrieITraverse
 
-  -- | Implementation of the append operation used in
-  -- the 'Semigroup' and 'Monoid' instances for 'Trie'.
-  trieAppend :: Semigroup a => Trie k a -> Trie k a -> Trie k a
-  default trieAppend ::
+  -- | Expose operation like 'Map.mergeWithKey' and 'IntMap.mergeWithKey' used
+  -- to provide efficient operations on two 'Trie's.
+  -- When using this function care must be taken to ensure that
+  -- the second and third function arguments return a 'Trie' with a
+  -- subset of the original keys. No new keys may be added, but fewer may
+  -- be returned.
+  trieMergeWithKey :: (k -> a -> b -> Maybe c) -> (Trie k a -> Trie k c) -> (Trie k b -> Trie k c) -> Trie k a -> Trie k b -> Trie k c
+  default trieMergeWithKey ::
      ( GTrieKey (Rep k)
+     , Generic k
      , Coercible (Trie k a) (GTrie (Rep k) a)
-     , Semigroup a
+     , Coercible (Trie k b) (GTrie (Rep k) b)
+     , Coercible (Trie k c) (GTrie (Rep k) c)
      ) =>
-     Trie k a -> Trie k a -> Trie k a
-  trieAppend = genericTrieAppend
+     (k -> a -> b -> Maybe c) -> (Trie k a -> Trie k c) -> (Trie k b -> Trie k c) -> Trie k a -> Trie k b -> Trie k c
+  trieMergeWithKey = genericTrieMergeWithKey
 
 instance TrieKey k => Functor     (Trie k) where fmap     = fmapDefault
 instance TrieKey k => Foldable    (Trie k) where foldMap  = foldMapDefault
 instance TrieKey k => Traversable (Trie k) where traverse = trieITraverse
 
 instance (Semigroup a, TrieKey k) => Monoid (Trie k a) where
-  mappend = trieAppend
+  mappend = (<>)
   mempty  = trieEmpty
 
 instance (Semigroup a, TrieKey k) => Semigroup (Trie k a) where
-  (<>) = trieAppend
+  (<>) = trieMergeWithKey (\_ a b -> Just (a <> b)) id id
 
 instance TrieKey k => At   (Trie k a) where at = trieAt
 instance TrieKey k => Ixed (Trie k a) where ix = ixAt
@@ -140,7 +146,19 @@ instance TrieKey k => Ixed (Trie k a) where ix = ixAt
 -- | Abstract type when generating tries from the 'Generic' representation of a key.
 newtype GenericTrie k a = GenericTrie (GTrie (Rep k) a)
 
+coerceMergeWithKey ::
+  ( Coercible (f a) (g a)
+  , Coercible (f b) (g b)
+  , Coercible (f c) (g c)
+  ) =>
+  (z -> (f a -> f c) -> (f b -> f c) -> f a -> f b -> f c) ->
 
+  z ->
+  (g a -> g c) ->
+  (g b -> g c) ->
+  g a -> g b -> g c
+coerceMergeWithKey = Data.Coerce.coerce
+{-# INLINE coerceMergeWithKey #-}
 
 -- Base instances
 
@@ -150,7 +168,7 @@ instance TrieKey Int where
   trieNull (IntTrie x)        = IntMap.null x
   trieEmpty                   = IntTrie IntMap.empty
   trieITraverse f (IntTrie x) = fmap IntTrie (itraversed f x)
-  trieAppend (IntTrie x) (IntTrie y) = IntTrie (IntMap.unionWith (<>) x y)
+  trieMergeWithKey            = coerceMergeWithKey IntMap.mergeWithKey
 
 newtype instance Trie Int8 a = Int8Trie (IntMap a)
 instance TrieKey Int8 where
@@ -158,7 +176,7 @@ instance TrieKey Int8 where
   trieNull (Int8Trie x)        = IntMap.null x
   trieEmpty                    = Int8Trie IntMap.empty
   trieITraverse f (Int8Trie x) = fmap Int8Trie (reindexed (toEnum :: Int -> Int8) itraversed f x)
-  trieAppend (Int8Trie x) (Int8Trie y) = Int8Trie (IntMap.unionWith (<>) x y)
+  trieMergeWithKey f           = coerceMergeWithKey IntMap.mergeWithKey (f . toEnum)
 
 newtype instance Trie Int16 a = Int16Trie (IntMap a)
 instance TrieKey Int16 where
@@ -166,15 +184,15 @@ instance TrieKey Int16 where
   trieNull (Int16Trie x)        = IntMap.null x
   trieEmpty                     = Int16Trie IntMap.empty
   trieITraverse f (Int16Trie x) = fmap Int16Trie (reindexed (toEnum :: Int -> Int16) itraversed f x)
-  trieAppend (Int16Trie x) (Int16Trie y) = Int16Trie (IntMap.unionWith (<>) x y)
+  trieMergeWithKey f            = coerceMergeWithKey IntMap.mergeWithKey (f . toEnum)
 
 newtype instance Trie Int32 a = Int32Trie (IntMap a)
 instance TrieKey Int32 where
-  trieAt k                     = iso (\(Int32Trie t) -> t) Int32Trie . at (fromEnum k)
+  trieAt k                      = iso (\(Int32Trie t) -> t) Int32Trie . at (fromEnum k)
   trieNull (Int32Trie x)        = IntMap.null x
-  trieEmpty                    = Int32Trie IntMap.empty
+  trieEmpty                     = Int32Trie IntMap.empty
   trieITraverse f (Int32Trie x) = fmap Int32Trie (reindexed (toEnum :: Int -> Int32) itraversed f x)
-  trieAppend (Int32Trie x) (Int32Trie y) = Int32Trie (IntMap.unionWith (<>) x y)
+  trieMergeWithKey f            = coerceMergeWithKey IntMap.mergeWithKey (f . toEnum)
 
 newtype instance Trie Int64 a = Int64Trie (Map Int64 a)
 instance TrieKey Int64 where
@@ -182,7 +200,7 @@ instance TrieKey Int64 where
   trieNull (Int64Trie x)        = Map.null x
   trieEmpty                     = Int64Trie Map.empty
   trieITraverse f (Int64Trie x) = fmap Int64Trie (itraversed f x)
-  trieAppend (Int64Trie x) (Int64Trie y) = Int64Trie (Map.unionWith (<>) x y)
+  trieMergeWithKey              = coerceMergeWithKey Map.mergeWithKey
 
 newtype instance Trie Word8 a = Word8Trie (IntMap a)
 instance TrieKey Word8 where
@@ -190,7 +208,7 @@ instance TrieKey Word8 where
   trieNull (Word8Trie x)        = IntMap.null x
   trieEmpty                     = Word8Trie IntMap.empty
   trieITraverse f (Word8Trie x) = fmap Word8Trie (reindexed (toEnum :: Int -> Word8) itraversed f x)
-  trieAppend (Word8Trie x) (Word8Trie y) = Word8Trie (IntMap.unionWith (<>) x y)
+  trieMergeWithKey f            = coerceMergeWithKey IntMap.mergeWithKey (f . toEnum)
 
 newtype instance Trie Word16 a = Word16Trie (IntMap a)
 instance TrieKey Word16 where
@@ -198,7 +216,7 @@ instance TrieKey Word16 where
   trieNull (Word16Trie x)        = IntMap.null x
   trieEmpty                      = Word16Trie IntMap.empty
   trieITraverse f (Word16Trie x) = fmap Word16Trie (reindexed (toEnum :: Int -> Word16) itraversed f x)
-  trieAppend (Word16Trie x) (Word16Trie y) = Word16Trie (IntMap.unionWith (<>) x y)
+  trieMergeWithKey f             = coerceMergeWithKey IntMap.mergeWithKey (f . toEnum)
 
 newtype instance Trie Word32 a = Word32Trie (Map Word32 a)
 instance TrieKey Word32 where
@@ -206,7 +224,7 @@ instance TrieKey Word32 where
   trieNull (Word32Trie x)        = Map.null x
   trieEmpty                      = Word32Trie Map.empty
   trieITraverse f (Word32Trie x) = fmap Word32Trie (itraversed f x)
-  trieAppend (Word32Trie x) (Word32Trie y) = Word32Trie (Map.unionWith (<>) x y)
+  trieMergeWithKey               = coerceMergeWithKey Map.mergeWithKey
 
 newtype instance Trie Word64 a = Word64Trie (Map Word64 a)
 instance TrieKey Word64 where
@@ -214,7 +232,7 @@ instance TrieKey Word64 where
   trieNull (Word64Trie x)        = Map.null x
   trieEmpty                      = Word64Trie Map.empty
   trieITraverse f (Word64Trie x) = fmap Word64Trie (itraversed f x)
-  trieAppend (Word64Trie x) (Word64Trie y) = Word64Trie (Map.unionWith (<>) x y)
+  trieMergeWithKey               = coerceMergeWithKey Map.mergeWithKey
 
 newtype instance Trie Integer a = IntegerTrie (Map Integer a)
 instance TrieKey Integer where
@@ -222,7 +240,8 @@ instance TrieKey Integer where
   trieNull (IntegerTrie x)        = Map.null x
   trieEmpty                       = IntegerTrie Map.empty
   trieITraverse f (IntegerTrie x) = fmap IntegerTrie (itraversed f x)
-  trieAppend (IntegerTrie x) (IntegerTrie y) = IntegerTrie (Map.unionWith (<>) x y)
+  trieMergeWithKey                = coerceMergeWithKey Map.mergeWithKey
+
 
 newtype instance Trie Char a = CharTrie (IntMap a)
 instance TrieKey Char where
@@ -230,7 +249,7 @@ instance TrieKey Char where
   trieNull (CharTrie x)        = IntMap.null x
   trieEmpty                    = CharTrie IntMap.empty
   trieITraverse f (CharTrie x) = fmap CharTrie (reindexed chr itraversed f x)
-  trieAppend (CharTrie x) (CharTrie y) = CharTrie (IntMap.unionWith (<>) x y)
+  trieMergeWithKey f           = coerceMergeWithKey IntMap.mergeWithKey (f . chr)
 
 
 newtype instance Trie Bool a = BoolTrie (GenericTrie Bool a)
@@ -288,17 +307,23 @@ genericTrieEmpty ::
 genericTrieEmpty = coerceWith (sym Coercion) (gtrieEmpty :: GTrie (Rep k) a)
 
 
-genericTrieAppend ::
-  forall k a.
+genericTrieMergeWithKey ::
+  forall k a b c.
   ( GTrieKey (Rep k)
+  , Generic k
   , Coercible (Trie k a) (GTrie (Rep k) a)
-  , Semigroup a
+  , Coercible (Trie k b) (GTrie (Rep k) b)
+  , Coercible (Trie k c) (GTrie (Rep k) c)
   ) =>
-  Trie k a -> Trie k a -> Trie k a
-genericTrieAppend =
+  (k -> a -> b -> Maybe c) -> (Trie k a -> Trie k c) -> (Trie k b -> Trie k c) -> Trie k a -> Trie k b -> Trie k c
+genericTrieMergeWithKey f =
   case sym (Coercion :: Coercion (Trie k a) (GTrie (Rep k) a)) of
     Coercion ->
-      Data.Coerce.coerce (gtrieAppend :: GTrie (Rep k) a -> GTrie (Rep k) a -> GTrie (Rep k) a)
+      case sym (Coercion :: Coercion (Trie k b) (GTrie (Rep k) b)) of
+        Coercion ->
+          case sym (Coercion :: Coercion (Trie k c) (GTrie (Rep k) c)) of
+            Coercion ->
+               coerceMergeWithKey gtrieMergeWithKey (f . GHC.Generics.to)
 
 
 genericTrieAt ::
@@ -330,8 +355,12 @@ class GTrieKey f where
   gtrieAt      :: f () -> Lens' (GTrie f a) (Maybe a)
   gtrieNull      :: GTrie f a -> Bool
   gtrieEmpty     :: GTrie f a
-  gtrieAppend    :: Semigroup a => GTrie f a -> GTrie f a -> GTrie f a
   gtrieITraverse :: IndexedTraversal (f ()) (GTrie f a) (GTrie f b) a b
+  gtrieMergeWithKey ::
+     (f () -> a -> b -> Maybe c) ->
+     (GTrie f a -> GTrie f c) ->
+     (GTrie f b -> GTrie f c) ->
+     GTrie f a -> GTrie f b -> GTrie f c
 
 
 
@@ -343,7 +372,11 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gtrieAt (M1 k)             = mtrieIso . gtrieAt k
   gtrieNull (MTrie m)        = gtrieNull m
   gtrieEmpty                 = MTrie gtrieEmpty
-  gtrieAppend (MTrie x) (MTrie y) = MTrie (gtrieAppend x y)
+  gtrieMergeWithKey f        = coerceMergeWithKey gtrieMergeWithKey (c f)
+    where
+    c :: (M1 i c f () -> z) -> f () -> z
+    c = Data.Coerce.coerce
+
   gtrieITraverse             = mtrieIso . reindexed m1 gtrieITraverse
     where
     m1 :: f () -> M1 i c f ()
@@ -358,7 +391,11 @@ instance TrieKey k => GTrieKey (K1 i k) where
   gtrieAt (K1 k)           = ktrieIso . trieAt k
   gtrieNull (KTrie k)      = trieNull k
   gtrieEmpty               = KTrie trieEmpty
-  gtrieAppend (KTrie x) (KTrie y) = KTrie (trieAppend x y)
+  gtrieMergeWithKey f      = coerceMergeWithKey trieMergeWithKey (c f)
+    where
+    c :: (K1 i k () -> z) -> k -> z
+    c = Data.Coerce.coerce
+
   gtrieITraverse           = ktrieIso . reindexed k1 trieITraverse
     where
     k1 :: a -> K1 i a ()
@@ -377,14 +414,29 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
                       . gtrieAt j
 
   gtrieEmpty          = PTrie gtrieEmpty
-  gtrieAppend (PTrie x) (PTrie y) = PTrie (x <> y)
   gtrieNull (PTrie m) = gtrieNull m
   gtrieITraverse      = ptrieIso . icompose (:*:) gtrieITraverse gtrieITraverse
 
+  gtrieMergeWithKey f g h (PTrie m) (PTrie n) =
+    PTrie (gtrieMergeWithKey
+              (\fk x y ->
+                noEmpty
+                  (gtrieMergeWithKey
+                     (\gk -> f (fk :*: gk))
+                     (wrap fk g)
+                     (wrap fk h)
+                     x y)) (under ptrieIso g) (under ptrieIso h) m n)
 
--- Actually used in the :*: case's gtrieAppend!
-instance (GTrieKey k, Semigroup a) => Semigroup (GTrie k a) where
-  (<>) = gtrieAppend
+    where
+    noEmpty x
+      | gtrieNull x = Nothing
+      | otherwise   = Just x
+
+    wrap k t x =
+      let p = under ptrieIso t (set (gtrieAt k) (Just x) gtrieEmpty)
+      in case view (gtrieAt k) p of
+           Nothing -> gtrieEmpty
+           Just x' -> x'
 
 
 strieFst :: Lens (GTrie (f :+: g) a) (GTrie (f' :+: g) a) (GTrie f a) (GTrie f' a)
@@ -400,7 +452,16 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   gtrieAt (R1 k)               = strieSnd . gtrieAt k
   gtrieEmpty                   = STrie gtrieEmpty gtrieEmpty
   gtrieNull (STrie m1 m2)      = gtrieNull m1 && gtrieNull m2
-  gtrieAppend (STrie m1 m2) (STrie n1 n2) = STrie (gtrieAppend m1 n1) (gtrieAppend m2 n2)
+  gtrieMergeWithKey f g h (STrie m1 m2) (STrie n1 n2) =
+    STrie (coerceMergeWithKey gtrieMergeWithKey (f . L1) (wrapL g) (wrapL h) m1 n1)
+          (coerceMergeWithKey gtrieMergeWithKey (f . R1) (wrapR g) (wrapR h) m2 n2)
+    where
+    wrapL t x = case t (STrie x gtrieEmpty) of
+                  STrie x' _ -> x'
+
+    wrapR t x = case t (STrie gtrieEmpty x) of
+                  STrie _ x' -> x'
+
   gtrieITraverse f (STrie x y) = STrie <$> reindexed l1 gtrieITraverse f x
                                        <*> reindexed r1 gtrieITraverse f y
     where
@@ -413,25 +474,29 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
 utrieIso :: Iso (GTrie U1 a) (GTrie U1 b) (Maybe a) (Maybe b)
 utrieIso = iso (\(UTrie x) -> x) UTrie
 
+u1 :: U1 ()
+u1 = U1
+
 instance GTrieKey U1 where
   newtype GTrie U1 a  = UTrie (Maybe a)
   gtrieAt _           = utrieIso
   gtrieEmpty          = UTrie Nothing
   gtrieNull (UTrie u) = isNothing u
-  gtrieAppend (UTrie x) (UTrie y) = UTrie (x <> y)
   gtrieITraverse      = utrieIso . traverse . flip indexed u1
-    where
-    u1 :: U1 ()
-    u1 = U1
+
+  gtrieMergeWithKey _ _ _ (UTrie Nothing) (UTrie Nothing) = UTrie Nothing
+  gtrieMergeWithKey f _ _ (UTrie (Just x)) (UTrie (Just y)) = UTrie (f u1 x y)
+  gtrieMergeWithKey _ g _ x                (UTrie Nothing) = g x
+  gtrieMergeWithKey _ _ h (UTrie Nothing)  y               = h y
 
 
 instance GTrieKey V1 where
-  data GTrie V1 a        = VTrie
-  gtrieAt k _ _          = k `seq` error "GTrieKey.V1: gtrieAt"
-  gtrieEmpty             = VTrie
-  gtrieAppend _ _        = VTrie
-  gtrieNull _            = True
-  gtrieITraverse _ _     = pure VTrie
+  data GTrie V1 a             = VTrie
+  gtrieAt k _ _               = k `seq` error "GTrieKey.V1: gtrieAt"
+  gtrieEmpty                  = VTrie
+  gtrieNull _                 = True
+  gtrieITraverse _ _          = pure VTrie
+  gtrieMergeWithKey _ _ _ _ _ = VTrie
 
 
 instance TrieKey k => FunctorWithIndex     k (Trie k) where
@@ -441,9 +506,8 @@ instance TrieKey k => TraversableWithIndex k (Trie k) where
   itraversed = trieITraverse
 
 instance (Eq a, TrieKey k) => Eq (Trie k a) where
-  x == y = Foldable.all isGoodMatch (start x <> start y)
-    where
-    start = fmap (\x -> [x])
-
-    isGoodMatch [a,b] = a == b
-    isGoodMatch _     = False
+  x == y = Foldable.and (trieMergeWithKey merge (fmap (const False)) (fmap (const False)) x y)
+     where
+     merge _ a b
+       | a == b    = Nothing
+       | otherwise = Just False
