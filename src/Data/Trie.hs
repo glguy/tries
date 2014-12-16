@@ -13,18 +13,27 @@
 By defining an instance of 'TrieKey' with a 'GenericTrie' implementation
 for 'Trie' all methods of 'TrieKey' can be derived automatically.
 
-> data DemoType = DemoC1 Int | DemoC2 Int Int
->   deriving Generic
->
-> instance TrieKey DemoType where
->   newtype Trie DemoType a = DemoTrie (GenericTrie DemoType a)
->
+@
+data Demo = DemoC1 'Int' | DemoC2 'Int' 'Char'  deriving 'Generic'
+
+instance 'TrieKey' Demo
+newtype instance 'Trie' Demo a = DemoTrie ('GenericTrie' Demo a)
+@
+
+* Example operations on 'Trie's
+* @ 'view' . 'at' :: 'TrieKey' k => k -> 'Trie' k a -> 'Maybe' a @
+* @ 'set'  . 'at' :: 'TrieKey' k => k ->             'Maybe' a  -> 'Trie' k a -> 'Trie' k a @
+* @ 'over' . 'at' :: 'TrieKey' k => k -> ('Maybe' a -> 'Maybe' a) -> 'Trie' k a -> 'Trie' k a @
+* @ 'toList'    :: 'TrieKey' k => 'Trie' k a -> [a] @
+* @ 'itoList'   :: 'TrieKey' k => 'Trie' k a -> [(k,a)] @
 -}
 
 module Data.Trie
   (
+  -- * Trie data family
+    Trie
   -- * Trie operations
-    TrieKey(..)
+  , TrieKey(..)
   -- * Generic instance generation
   , GenericTrie
   ) where
@@ -35,7 +44,7 @@ import Control.Applicative
 import Control.Lens
 import Data.Char (ord,chr)
 import Data.Coerce
-import Data.Foldable (Foldable(..))
+import Data.Foldable (Foldable(..), toList)
 import Data.Int
 import Data.IntMap (IntMap)
 import Data.Map (Map)
@@ -51,12 +60,17 @@ import qualified Data.Map as Map
 import qualified Data.Foldable as Foldable
 
 
+-- | Associated datatype of tries indexable by keys of type @k@.
+data family Trie k a
+
+type instance Index   (Trie k a) = k
+type instance IxValue (Trie k a) = a
+
 -- | Keys that support prefix-trie map operations.
 --
 -- All operations can be automatically derived when
 -- the associated 'Trie' type is a /newtype/ of 'GenericTrie'.
 class TrieKey k where
-  -- | Associated datatype of tries indexable by keys of type @k@.
   --
   -- @
   -- Instances
@@ -77,7 +91,6 @@ class TrieKey k where
   -- 'TrieKey' k => 'At'   ('Trie' k a)
   -- 'TrieKey' k => 'Ixed' ('Trie' k a)
   -- @
-  data Trie k a
 
   -- | Returns 'True' when the 'Trie' contains no values.
   trieNull  :: Trie k a -> Bool
@@ -141,8 +154,6 @@ instance (Semigroup a, TrieKey k) => Monoid (Trie k a) where
 instance (Semigroup a, TrieKey k) => Semigroup (Trie k a) where
   (<>) = trieAppend
 
-type instance Index   (Trie k a) = k
-type instance IxValue (Trie k a) = a
 instance TrieKey k => At   (Trie k a) where at = trieAt
 instance TrieKey k => Ixed (Trie k a) where ix = ixAt
 
@@ -154,137 +165,130 @@ newtype GenericTrie k a = GenericTrie (GTrie (Rep k) a)
 
 -- Base instances
 
+newtype instance Trie Int a = IntTrie (IntMap a)
 instance TrieKey Int where
-  newtype Trie Int a          = IntTrie (IntMap a)
   trieAt k                    = iso (\(IntTrie t) -> t) IntTrie . at k
   trieNull (IntTrie x)        = IntMap.null x
   trieEmpty                   = IntTrie IntMap.empty
   trieITraverse f (IntTrie x) = fmap IntTrie (itraversed f x)
   trieAppend (IntTrie x) (IntTrie y) = IntTrie (IntMap.unionWith (<>) x y)
 
+newtype instance Trie Int8 a = Int8Trie (IntMap a)
 instance TrieKey Int8 where
-  newtype Trie Int8 a          = Int8Trie (IntMap a)
   trieAt k                     = iso (\(Int8Trie t) -> t) Int8Trie . at (fromEnum k)
   trieNull (Int8Trie x)        = IntMap.null x
   trieEmpty                    = Int8Trie IntMap.empty
   trieITraverse f (Int8Trie x) = fmap Int8Trie (reindexed (toEnum :: Int -> Int8) itraversed f x)
   trieAppend (Int8Trie x) (Int8Trie y) = Int8Trie (IntMap.unionWith (<>) x y)
 
+newtype instance Trie Int16 a = Int16Trie (IntMap a)
 instance TrieKey Int16 where
-  newtype Trie Int16 a          = Int16Trie (IntMap a)
   trieAt k                      = iso (\(Int16Trie t) -> t) Int16Trie . at (fromEnum k)
   trieNull (Int16Trie x)        = IntMap.null x
   trieEmpty                     = Int16Trie IntMap.empty
   trieITraverse f (Int16Trie x) = fmap Int16Trie (reindexed (toEnum :: Int -> Int16) itraversed f x)
   trieAppend (Int16Trie x) (Int16Trie y) = Int16Trie (IntMap.unionWith (<>) x y)
 
+newtype instance Trie Int32 a = Int32Trie (IntMap a)
 instance TrieKey Int32 where
-  newtype Trie Int32 a          = Int32Trie (IntMap a)
   trieAt k                     = iso (\(Int32Trie t) -> t) Int32Trie . at (fromEnum k)
   trieNull (Int32Trie x)        = IntMap.null x
   trieEmpty                    = Int32Trie IntMap.empty
   trieITraverse f (Int32Trie x) = fmap Int32Trie (reindexed (toEnum :: Int -> Int32) itraversed f x)
   trieAppend (Int32Trie x) (Int32Trie y) = Int32Trie (IntMap.unionWith (<>) x y)
 
+newtype instance Trie Int64 a = Int64Trie (Map Int64 a)
 instance TrieKey Int64 where
-  newtype Trie Int64 a          = Int64Trie (Map Int64 a)
   trieAt k                      = iso (\(Int64Trie t) -> t) Int64Trie . at k
   trieNull (Int64Trie x)        = Map.null x
   trieEmpty                     = Int64Trie Map.empty
   trieITraverse f (Int64Trie x) = fmap Int64Trie (itraversed f x)
   trieAppend (Int64Trie x) (Int64Trie y) = Int64Trie (Map.unionWith (<>) x y)
 
+newtype instance Trie Word8 a = Word8Trie (IntMap a)
 instance TrieKey Word8 where
-  newtype Trie Word8 a          = Word8Trie (IntMap a)
   trieAt k                      = iso (\(Word8Trie t) -> t) Word8Trie . at (fromEnum k)
   trieNull (Word8Trie x)        = IntMap.null x
   trieEmpty                     = Word8Trie IntMap.empty
   trieITraverse f (Word8Trie x) = fmap Word8Trie (reindexed (toEnum :: Int -> Word8) itraversed f x)
   trieAppend (Word8Trie x) (Word8Trie y) = Word8Trie (IntMap.unionWith (<>) x y)
 
+newtype instance Trie Word16 a = Word16Trie (IntMap a)
 instance TrieKey Word16 where
-  newtype Trie Word16 a          = Word16Trie (IntMap a)
   trieAt k                       = iso (\(Word16Trie t) -> t) Word16Trie . at (fromEnum k)
   trieNull (Word16Trie x)        = IntMap.null x
   trieEmpty                      = Word16Trie IntMap.empty
   trieITraverse f (Word16Trie x) = fmap Word16Trie (reindexed (toEnum :: Int -> Word16) itraversed f x)
   trieAppend (Word16Trie x) (Word16Trie y) = Word16Trie (IntMap.unionWith (<>) x y)
 
+newtype instance Trie Word32 a = Word32Trie (Map Word32 a)
 instance TrieKey Word32 where
-  newtype Trie Word32 a          = Word32Trie (Map Word32 a)
   trieAt k                       = iso (\(Word32Trie t) -> t) Word32Trie . at k
   trieNull (Word32Trie x)        = Map.null x
   trieEmpty                      = Word32Trie Map.empty
   trieITraverse f (Word32Trie x) = fmap Word32Trie (itraversed f x)
   trieAppend (Word32Trie x) (Word32Trie y) = Word32Trie (Map.unionWith (<>) x y)
 
+newtype instance Trie Word64 a = Word64Trie (Map Word64 a)
 instance TrieKey Word64 where
-  newtype Trie Word64 a          = Word64Trie (Map Word64 a)
   trieAt k                       = iso (\(Word64Trie t) -> t) Word64Trie . at k
   trieNull (Word64Trie x)        = Map.null x
   trieEmpty                      = Word64Trie Map.empty
   trieITraverse f (Word64Trie x) = fmap Word64Trie (itraversed f x)
   trieAppend (Word64Trie x) (Word64Trie y) = Word64Trie (Map.unionWith (<>) x y)
 
+newtype instance Trie Integer a = IntegerTrie (Map Integer a)
 instance TrieKey Integer where
-  newtype Trie Integer a          = IntegerTrie (Map Integer a)
   trieAt k                        = iso (\(IntegerTrie t) -> t) IntegerTrie . at k
   trieNull (IntegerTrie x)        = Map.null x
   trieEmpty                       = IntegerTrie Map.empty
   trieITraverse f (IntegerTrie x) = fmap IntegerTrie (itraversed f x)
   trieAppend (IntegerTrie x) (IntegerTrie y) = IntegerTrie (Map.unionWith (<>) x y)
 
+newtype instance Trie Char a = CharTrie (IntMap a)
 instance TrieKey Char where
-  newtype Trie Char a          = CharTrie (IntMap a)
   trieAt k                     = iso (\(CharTrie t) -> t) CharTrie . at (ord k)
   trieNull (CharTrie x)        = IntMap.null x
   trieEmpty                    = CharTrie IntMap.empty
   trieITraverse f (CharTrie x) = fmap CharTrie (reindexed chr itraversed f x)
   trieAppend (CharTrie x) (CharTrie y) = CharTrie (IntMap.unionWith (<>) x y)
 
+
+newtype instance Trie Bool a = BoolTrie (GenericTrie Bool a)
 instance TrieKey Bool where
-  data Trie Bool a              = BoolTrie !(Maybe a) !(Maybe a)
-  trieAt False f (BoolTrie x y) = fmap (`BoolTrie` y) (f x)
-  trieAt True  f (BoolTrie x y) = fmap (x `BoolTrie`) (f y)
-  trieNull (BoolTrie x y)       = isNothing x && isNothing y
-  trieEmpty                     = BoolTrie Nothing Nothing
-  trieAppend (BoolTrie x1 x2) (BoolTrie y1 y2) = BoolTrie (x1 <> y1) (x2 <> y2)
-  trieITraverse f (BoolTrie x y) = BoolTrie <$> traverse (indexed f False) x <*> traverse (indexed f True) y
 
+instance TrieKey k => TrieKey (Maybe k)
+newtype instance Trie (Maybe k) a = MaybeTrie (GenericTrie (Maybe k) a)
 
+instance (TrieKey a, TrieKey b) => TrieKey (Either a b)
+newtype instance Trie (Either a b) v = EitherTrie (GenericTrie (Either a b) v)
 
-instance TrieKey k => TrieKey (Maybe k) where
-  newtype Trie (Maybe k) a = MaybeTrie (GenericTrie (Maybe k) a)
+instance TrieKey ()
+newtype instance Trie () v = Tuple0Trie (GenericTrie () v)
 
-instance (TrieKey a, TrieKey b) => TrieKey (Either a b) where
-  newtype Trie (Either a b) v = EitherTrie (GenericTrie (Either a b) v)
+instance (TrieKey a, TrieKey b) => TrieKey (a,b)
+newtype instance Trie (a,b) v = Tuple2Trie (GenericTrie (a,b) v)
 
-instance TrieKey () where
-  newtype Trie () v = Tuple0Trie (GenericTrie () v)
+instance (TrieKey a, TrieKey b, TrieKey c) => TrieKey (a,b,c)
+newtype instance Trie (a,b,c) v = Tuple3Trie (GenericTrie (a,b,c) v)
 
-instance (TrieKey a, TrieKey b) => TrieKey (a,b) where
-  newtype Trie (a,b) v = Tuple2Trie (GenericTrie (a,b) v)
+instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d) => TrieKey (a,b,c,d)
+newtype instance Trie (a,b,c,d) v = Tuple4Trie (GenericTrie (a,b,c,d) v)
 
-instance (TrieKey a, TrieKey b, TrieKey c) => TrieKey (a,b,c) where
-  newtype Trie (a,b,c) v = Tuple3Trie (GenericTrie (a,b,c) v)
+instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e) => TrieKey (a,b,c,d,e)
+newtype instance Trie (a,b,c,d,e) v = Tuple5Trie (GenericTrie (a,b,c,d,e) v)
 
-instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d) => TrieKey (a,b,c,d) where
-  newtype Trie (a,b,c,d) v = Tuple4Trie (GenericTrie (a,b,c,d) v)
+instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e, TrieKey f) => TrieKey (a,b,c,d,e,f)
+newtype instance Trie (a,b,c,d,e,f) v = Tuple6Trie (GenericTrie (a,b,c,d,e,f) v)
 
-instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e) => TrieKey (a,b,c,d,e) where
-  newtype Trie (a,b,c,d,e) v = Tuple5Trie (GenericTrie (a,b,c,d,e) v)
+instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e, TrieKey f, TrieKey g) => TrieKey (a,b,c,d,e,f,g)
+newtype instance Trie (a,b,c,d,e,f,g) v = Tuple7Trie (GenericTrie (a,b,c,d,e,f,g) v)
 
-instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e, TrieKey f) => TrieKey (a,b,c,d,e,f) where
-  newtype Trie (a,b,c,d,e,f) v = Tuple6Trie (GenericTrie (a,b,c,d,e,f) v)
+instance TrieKey Ordering
+newtype instance Trie Ordering v = OrderingTrie (GenericTrie Ordering v)
 
-instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e, TrieKey f, TrieKey g) => TrieKey (a,b,c,d,e,f,g) where
-  newtype Trie (a,b,c,d,e,f,g) v = Tuple7Trie (GenericTrie (a,b,c,d,e,f,g) v)
-
-instance TrieKey Ordering where
-  newtype Trie Ordering v = OrderingTrie (GenericTrie Ordering v)
-
-instance TrieKey k => TrieKey [k] where
-  newtype Trie [k] a = ListTrie (GenericTrie [k] a)
+instance TrieKey k => TrieKey [k]
+newtype instance Trie [k] a = ListTrie (GenericTrie [k] a)
 
 
 genericTrieNull ::
