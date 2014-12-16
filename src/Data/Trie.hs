@@ -36,6 +36,7 @@ import Control.Lens
 import Data.Char (ord,chr)
 import Data.Coerce
 import Data.Foldable (Foldable(..))
+import Data.Int
 import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
@@ -43,6 +44,7 @@ import Data.Monoid (Monoid(..))
 import Data.Semigroup (Option(..), Semigroup(..))
 import Data.Traversable (fmapDefault, foldMapDefault)
 import Data.Type.Coercion
+import Data.Word
 import GHC.Generics
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
@@ -160,9 +162,73 @@ instance TrieKey Int where
   trieITraverse f (IntTrie x) = fmap IntTrie (itraversed f x)
   trieAppend (IntTrie x) (IntTrie y) = IntTrie (IntMap.unionWith (<>) x y)
 
+instance TrieKey Int8 where
+  newtype Trie Int8 a          = Int8Trie (IntMap a)
+  trieAt k                     = iso (\(Int8Trie t) -> t) Int8Trie . at (fromEnum k)
+  trieNull (Int8Trie x)        = IntMap.null x
+  trieEmpty                    = Int8Trie IntMap.empty
+  trieITraverse f (Int8Trie x) = fmap Int8Trie (reindexed (toEnum :: Int -> Int8) itraversed f x)
+  trieAppend (Int8Trie x) (Int8Trie y) = Int8Trie (IntMap.unionWith (<>) x y)
+
+instance TrieKey Int16 where
+  newtype Trie Int16 a          = Int16Trie (IntMap a)
+  trieAt k                      = iso (\(Int16Trie t) -> t) Int16Trie . at (fromEnum k)
+  trieNull (Int16Trie x)        = IntMap.null x
+  trieEmpty                     = Int16Trie IntMap.empty
+  trieITraverse f (Int16Trie x) = fmap Int16Trie (reindexed (toEnum :: Int -> Int16) itraversed f x)
+  trieAppend (Int16Trie x) (Int16Trie y) = Int16Trie (IntMap.unionWith (<>) x y)
+
+instance TrieKey Int32 where
+  newtype Trie Int32 a          = Int32Trie (IntMap a)
+  trieAt k                     = iso (\(Int32Trie t) -> t) Int32Trie . at (fromEnum k)
+  trieNull (Int32Trie x)        = IntMap.null x
+  trieEmpty                    = Int32Trie IntMap.empty
+  trieITraverse f (Int32Trie x) = fmap Int32Trie (reindexed (toEnum :: Int -> Int32) itraversed f x)
+  trieAppend (Int32Trie x) (Int32Trie y) = Int32Trie (IntMap.unionWith (<>) x y)
+
+instance TrieKey Int64 where
+  newtype Trie Int64 a          = Int64Trie (Map Int64 a)
+  trieAt k                      = iso (\(Int64Trie t) -> t) Int64Trie . at k
+  trieNull (Int64Trie x)        = Map.null x
+  trieEmpty                     = Int64Trie Map.empty
+  trieITraverse f (Int64Trie x) = fmap Int64Trie (itraversed f x)
+  trieAppend (Int64Trie x) (Int64Trie y) = Int64Trie (Map.unionWith (<>) x y)
+
+instance TrieKey Word8 where
+  newtype Trie Word8 a          = Word8Trie (IntMap a)
+  trieAt k                      = iso (\(Word8Trie t) -> t) Word8Trie . at (fromEnum k)
+  trieNull (Word8Trie x)        = IntMap.null x
+  trieEmpty                     = Word8Trie IntMap.empty
+  trieITraverse f (Word8Trie x) = fmap Word8Trie (reindexed (toEnum :: Int -> Word8) itraversed f x)
+  trieAppend (Word8Trie x) (Word8Trie y) = Word8Trie (IntMap.unionWith (<>) x y)
+
+instance TrieKey Word16 where
+  newtype Trie Word16 a          = Word16Trie (IntMap a)
+  trieAt k                       = iso (\(Word16Trie t) -> t) Word16Trie . at (fromEnum k)
+  trieNull (Word16Trie x)        = IntMap.null x
+  trieEmpty                      = Word16Trie IntMap.empty
+  trieITraverse f (Word16Trie x) = fmap Word16Trie (reindexed (toEnum :: Int -> Word16) itraversed f x)
+  trieAppend (Word16Trie x) (Word16Trie y) = Word16Trie (IntMap.unionWith (<>) x y)
+
+instance TrieKey Word32 where
+  newtype Trie Word32 a          = Word32Trie (Map Word32 a)
+  trieAt k                       = iso (\(Word32Trie t) -> t) Word32Trie . at k
+  trieNull (Word32Trie x)        = Map.null x
+  trieEmpty                      = Word32Trie Map.empty
+  trieITraverse f (Word32Trie x) = fmap Word32Trie (itraversed f x)
+  trieAppend (Word32Trie x) (Word32Trie y) = Word32Trie (Map.unionWith (<>) x y)
+
+instance TrieKey Word64 where
+  newtype Trie Word64 a          = Word64Trie (Map Word64 a)
+  trieAt k                       = iso (\(Word64Trie t) -> t) Word64Trie . at k
+  trieNull (Word64Trie x)        = Map.null x
+  trieEmpty                      = Word64Trie Map.empty
+  trieITraverse f (Word64Trie x) = fmap Word64Trie (itraversed f x)
+  trieAppend (Word64Trie x) (Word64Trie y) = Word64Trie (Map.unionWith (<>) x y)
+
 instance TrieKey Integer where
   newtype Trie Integer a          = IntegerTrie (Map Integer a)
-  trieAt k                      = iso (\(IntegerTrie t) -> t) IntegerTrie . at k
+  trieAt k                        = iso (\(IntegerTrie t) -> t) IntegerTrie . at k
   trieNull (IntegerTrie x)        = Map.null x
   trieEmpty                       = IntegerTrie Map.empty
   trieITraverse f (IntegerTrie x) = fmap IntegerTrie (itraversed f x)
@@ -170,14 +236,14 @@ instance TrieKey Integer where
 
 instance TrieKey Char where
   newtype Trie Char a          = CharTrie (IntMap a)
-  trieAt k                   = iso (\(CharTrie t) -> t) CharTrie . at (ord k)
+  trieAt k                     = iso (\(CharTrie t) -> t) CharTrie . at (ord k)
   trieNull (CharTrie x)        = IntMap.null x
   trieEmpty                    = CharTrie IntMap.empty
-  trieAppend (CharTrie x) (CharTrie y) = CharTrie (IntMap.unionWith (<>) x y)
   trieITraverse f (CharTrie x) = fmap CharTrie (reindexed chr itraversed f x)
+  trieAppend (CharTrie x) (CharTrie y) = CharTrie (IntMap.unionWith (<>) x y)
 
 instance TrieKey Bool where
-  data Trie Bool a             = BoolTrie !(Maybe a) !(Maybe a)
+  data Trie Bool a              = BoolTrie !(Maybe a) !(Maybe a)
   trieAt False f (BoolTrie x y) = fmap (`BoolTrie` y) (f x)
   trieAt True  f (BoolTrie x y) = fmap (x `BoolTrie`) (f y)
   trieNull (BoolTrie x y)       = isNothing x && isNothing y
