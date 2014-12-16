@@ -18,7 +18,6 @@ library
   other-extensions:    FlexibleContexts,
                        FlexibleInstances,
                        DefaultSignatures,
-                       DeriveGeneric,
                        TypeOperators,
                        TypeFamilies,
                        RankNTypes,

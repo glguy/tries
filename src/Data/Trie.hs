@@ -4,7 +4,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
@@ -32,20 +31,19 @@ module Data.Trie
 
 
 
-import Data.Maybe (isNothing)
+import Control.Applicative
+import Control.Lens
 import Data.Char (ord,chr)
 import Data.Coerce
-import Data.Type.Coercion
-import Control.Lens
-import Control.Applicative
-import Data.Monoid
-import Data.Map (Map)
-import GHC.Generics
 import Data.Foldable (Foldable(..))
-import Data.Traversable (Traversable(..), fmapDefault, foldMapDefault)
 import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
 import Data.Map (Map)
+import Data.Maybe (isNothing)
+import Data.Monoid
+import Data.Traversable (Traversable(..), fmapDefault, foldMapDefault)
+import Data.Type.Coercion
+import GHC.Generics
+import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 
 
