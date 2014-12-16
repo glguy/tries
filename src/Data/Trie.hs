@@ -39,12 +39,14 @@ import Data.Foldable (Foldable(..))
 import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
-import Data.Monoid
+import Data.Monoid (Monoid(..))
+import Data.Semigroup (Option(..), Semigroup(..))
 import Data.Traversable (fmapDefault, foldMapDefault)
 import Data.Type.Coercion
 import GHC.Generics
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
+import qualified Data.Foldable as Foldable
 
 
 -- | Keys that support prefix-trie map operations.
@@ -60,7 +62,8 @@ class TrieKey k where
   -- 'TrieKey' k => 'FunctorWithIndex'     k ('Trie' k)
   -- 'TrieKey' k => 'FoldableWithIndex'    k ('Trie' k)
   --
-  -- ('Monoid' a, 'TrieKey' k) => 'Monoid' ('Trie' k a)
+  -- ('Semigroup' a, 'TrieKey' k) => 'Monoid'    ('Trie' k a)
+  -- ('Semigroup' a, 'TrieKey' k) => 'Semigroup' ('Trie' k a)
   --
   -- 'Index'   ('Trie' k a) = k
   -- 'IxValue' ('Trie' k a) = a
@@ -111,11 +114,11 @@ class TrieKey k where
 
   -- | Implementation of the 'Monoid' 'mappend' function used in the 'Monoid'
   -- instance for 'Trie'.
-  trieAppend :: Monoid a => Trie k a -> Trie k a -> Trie k a
+  trieAppend :: Semigroup a => Trie k a -> Trie k a -> Trie k a
   default trieAppend ::
      ( GTrieKey (Rep k)
      , Coercible (Trie k a) (GTrie (Rep k) a)
-     , Monoid a
+     , Semigroup a
      ) =>
      Trie k a -> Trie k a -> Trie k a
   trieAppend = genericTrieAppend
@@ -124,9 +127,12 @@ instance TrieKey k => Functor     (Trie k) where fmap     = fmapDefault
 instance TrieKey k => Foldable    (Trie k) where foldMap  = foldMapDefault
 instance TrieKey k => Traversable (Trie k) where traverse = trieITraverse
 
-instance (Monoid a, TrieKey k) => Monoid (Trie k a) where
+instance (Semigroup a, TrieKey k) => Monoid (Trie k a) where
   mappend = trieAppend
   mempty  = trieEmpty
+
+instance (Semigroup a, TrieKey k) => Semigroup (Trie k a) where
+  (<>) = trieAppend
 
 type instance Index   (Trie k a) = k
 type instance IxValue (Trie k a) = a
@@ -147,7 +153,7 @@ instance TrieKey Int where
   trieNull (IntTrie x)        = IntMap.null x
   trieEmpty                   = IntTrie IntMap.empty
   trieITraverse f (IntTrie x) = fmap IntTrie (itraversed f x)
-  trieAppend (IntTrie x) (IntTrie y) = IntTrie (IntMap.unionWith mappend x y)
+  trieAppend (IntTrie x) (IntTrie y) = IntTrie (IntMap.unionWith (<>) x y)
 
 instance TrieKey Integer where
   newtype Trie Integer a          = IntegerTrie (Map Integer a)
@@ -155,14 +161,14 @@ instance TrieKey Integer where
   trieNull (IntegerTrie x)        = Map.null x
   trieEmpty                       = IntegerTrie Map.empty
   trieITraverse f (IntegerTrie x) = fmap IntegerTrie (itraversed f x)
-  trieAppend (IntegerTrie x) (IntegerTrie y) = IntegerTrie (Map.unionWith mappend x y)
+  trieAppend (IntegerTrie x) (IntegerTrie y) = IntegerTrie (Map.unionWith (<>) x y)
 
 instance TrieKey Char where
   newtype Trie Char a          = CharTrie (IntMap a)
   trieAt k                   = iso (\(CharTrie t) -> t) CharTrie . at (ord k)
   trieNull (CharTrie x)        = IntMap.null x
   trieEmpty                    = CharTrie IntMap.empty
-  trieAppend (CharTrie x) (CharTrie y) = CharTrie (IntMap.unionWith mappend x y)
+  trieAppend (CharTrie x) (CharTrie y) = CharTrie (IntMap.unionWith (<>) x y)
   trieITraverse f (CharTrie x) = fmap CharTrie (reindexed chr itraversed f x)
 
 instance TrieKey Bool where
@@ -171,7 +177,7 @@ instance TrieKey Bool where
   trieAt True  f (BoolTrie x y) = fmap (x `BoolTrie`) (f y)
   trieNull (BoolTrie x y)       = isNothing x && isNothing y
   trieEmpty                     = BoolTrie Nothing Nothing
-  trieAppend (BoolTrie x1 x2) (BoolTrie y1 y2) = BoolTrie (mappend x1 y1) (mappend x2 y2)
+  trieAppend (BoolTrie x1 x2) (BoolTrie y1 y2) = BoolTrie (x1 <> y1) (x2 <> y2)
   trieITraverse f (BoolTrie x y) = BoolTrie <$> traverse (indexed f False) x <*> traverse (indexed f True) y
 
 
@@ -232,7 +238,7 @@ genericTrieAppend ::
   forall k a.
   ( GTrieKey (Rep k)
   , Coercible (Trie k a) (GTrie (Rep k) a)
-  , Monoid a
+  , Semigroup a
   ) =>
   Trie k a -> Trie k a -> Trie k a
 genericTrieAppend =
@@ -270,7 +276,7 @@ class GTrieKey f where
   gtrieAt      :: f () -> Lens' (GTrie f a) (Maybe a)
   gtrieNull      :: GTrie f a -> Bool
   gtrieEmpty     :: GTrie f a
-  gtrieAppend    :: Monoid a => GTrie f a -> GTrie f a -> GTrie f a
+  gtrieAppend    :: Semigroup a => GTrie f a -> GTrie f a -> GTrie f a
   gtrieITraverse :: IndexedTraversal (f ()) (GTrie f a) (GTrie f b) a b
 
 
@@ -317,15 +323,14 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
                       . gtrieAt j
 
   gtrieEmpty          = PTrie gtrieEmpty
-  gtrieAppend (PTrie x) (PTrie y) = PTrie (gtrieAppend x y)
+  gtrieAppend (PTrie x) (PTrie y) = PTrie (x <> y)
   gtrieNull (PTrie m) = gtrieNull m
   gtrieITraverse      = ptrieIso . icompose (:*:) gtrieITraverse gtrieITraverse
 
 
 -- Actually used in the :*: case's gtrieAppend!
-instance (GTrieKey k, Monoid a) => Monoid (GTrie k a) where
-  mappend = gtrieAppend
-  mempty  = gtrieEmpty
+instance (GTrieKey k, Semigroup a) => Semigroup (GTrie k a) where
+  (<>) = gtrieAppend
 
 
 strieFst :: Lens (GTrie (f :+: g) a) (GTrie (f' :+: g) a) (GTrie f a) (GTrie f' a)
