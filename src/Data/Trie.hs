@@ -30,7 +30,7 @@ instance 'TrieKey' Demo
 module Data.Trie
   (
   -- * Trie data family
-    Trie
+    Trie(..)
   -- * Trie operations
   , TrieKey(..)
   ) where
@@ -61,6 +61,7 @@ import qualified Data.Foldable as Foldable
 -- All operations can be automatically derived from a 'Generic' instance.
 class TrieKey k where
 
+  -- | Type of the representation of tries for this key.
   type TrieRep k a
   type instance TrieRep k a = GTrie (Rep k) a
 
