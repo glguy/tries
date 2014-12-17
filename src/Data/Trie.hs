@@ -616,3 +616,6 @@ type instance Index   (Trie k a) = k
 type instance IxValue (Trie k a) = a
 instance TrieKey k => At   (Trie k a) where at = trieAt
 instance TrieKey k => Ixed (Trie k a) where ix = ixAt
+
+instance TrieKey k => AsEmpty (Trie k a) where
+  _Empty = prism' (const trieEmpty) (\x -> if trieNull x then Just () else Nothing)
