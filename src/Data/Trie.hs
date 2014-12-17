@@ -408,14 +408,13 @@ ptrieIso :: Iso (GTrie (f :*: g) a) (GTrie (f' :*: g') b) (GTrie f (GTrie g a)) 
 ptrieIso = iso (\(PTrie p) -> p) PTrie
 {-# INLINE ptrieIso #-}
 
+middleAt k = gtrieAt k . anon gtrieEmpty gtrieNull
+{-# INLINE middleAt #-}
+
 instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   newtype GTrie (f :*: g) a = PTrie (GTrie f (GTrie g a))
 
-  gtrieAt (i :*: j)   = ptrieIso
-                      . gtrieAt i
-                      . anon gtrieEmpty gtrieNull
-                      . gtrieAt j
-
+  gtrieAt (i :*: j)   = ptrieIso . middleAt i . gtrieAt j
   gtrieEmpty          = PTrie gtrieEmpty
   gtrieNull (PTrie m) = gtrieNull m
   gtrieITraverse      = ptrieIso . icompose (:*:) gtrieITraverse gtrieITraverse
@@ -438,11 +437,11 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
       | gtrieNull x = Nothing
       | otherwise   = Just x
 
-    wrap k t x =
-      let p = under ptrieIso t (set (gtrieAt k) (Just x) gtrieEmpty)
-      in case view (gtrieAt k) p of
-           Nothing -> gtrieEmpty
-           Just x' -> x'
+    wrap k t = \x ->
+      view (middleAt k)
+         $ under ptrieIso t
+         $ set (gtrieAt k) (Just x) gtrieEmpty -- make: singleton k x
+    {-# INLINE wrap #-}
 
 
 strieFst :: Lens (GTrie (f :+: g) a) (GTrie (f' :+: g) a) (GTrie f a) (GTrie f' a)
