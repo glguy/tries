@@ -155,6 +155,7 @@ instance TrieKey k => Ixed (Trie k a) where ix = ixAt
 -- | Abstract type when generating tries from the 'Generic' representation of a key.
 newtype GenericTrie k a = GenericTrie (GTrie (Rep k) a)
 
+-- Wrapper for 'coerce' that exists to provide a common type signature.
 coerceMergeWithKey ::
   ( Coercible (f a) (g a)
   , Coercible (f b) (g b)
@@ -169,6 +170,7 @@ coerceMergeWithKey ::
 coerceMergeWithKey = Data.Coerce.coerce
 {-# INLINE coerceMergeWithKey #-}
 
+-- Wrapper for 'coerce' that exists to provide a common type signature.
 coerceMapMaybeWithKey ::
   ( Coercible (f a) (g a)
   , Coercible (f b) (g b)
@@ -182,7 +184,7 @@ coerceMapMaybeWithKey = Data.Coerce.coerce
 
 newtype instance Trie Int a = IntTrie (IntMap a)
 instance TrieKey Int where
-  trieAt k                    = iso (\(IntTrie t) -> t) IntTrie . at k
+  trieAt k f (IntTrie x)      = fmap IntTrie (at k f x)
   trieNull (IntTrie x)        = IntMap.null x
   trieEmpty                   = IntTrie IntMap.empty
   trieITraverse f (IntTrie x) = fmap IntTrie (itraversed f x)
@@ -191,7 +193,7 @@ instance TrieKey Int where
 
 newtype instance Trie Int8 a = Int8Trie (IntMap a)
 instance TrieKey Int8 where
-  trieAt k                     = iso (\(Int8Trie t) -> t) Int8Trie . at (fromEnum k)
+  trieAt k f (Int8Trie x)      = fmap Int8Trie (at (fromEnum k) f x)
   trieNull (Int8Trie x)        = IntMap.null x
   trieEmpty                    = Int8Trie IntMap.empty
   trieITraverse f (Int8Trie x) = fmap Int8Trie (reindexed (toEnum :: Int -> Int8) itraversed f x)
@@ -200,7 +202,7 @@ instance TrieKey Int8 where
 
 newtype instance Trie Int16 a = Int16Trie (IntMap a)
 instance TrieKey Int16 where
-  trieAt k                      = iso (\(Int16Trie t) -> t) Int16Trie . at (fromEnum k)
+  trieAt k f (Int16Trie x)      = fmap Int16Trie (at (fromEnum k) f x)
   trieNull (Int16Trie x)        = IntMap.null x
   trieEmpty                     = Int16Trie IntMap.empty
   trieITraverse f (Int16Trie x) = fmap Int16Trie (reindexed (toEnum :: Int -> Int16) itraversed f x)
@@ -209,7 +211,7 @@ instance TrieKey Int16 where
 
 newtype instance Trie Int32 a = Int32Trie (IntMap a)
 instance TrieKey Int32 where
-  trieAt k                      = iso (\(Int32Trie t) -> t) Int32Trie . at (fromEnum k)
+  trieAt k f (Int32Trie x)      = fmap Int32Trie (at (fromEnum k) f x)
   trieNull (Int32Trie x)        = IntMap.null x
   trieEmpty                     = Int32Trie IntMap.empty
   trieITraverse f (Int32Trie x) = fmap Int32Trie (reindexed (toEnum :: Int -> Int32) itraversed f x)
@@ -218,7 +220,7 @@ instance TrieKey Int32 where
 
 newtype instance Trie Int64 a = Int64Trie (Map Int64 a)
 instance TrieKey Int64 where
-  trieAt k                      = iso (\(Int64Trie t) -> t) Int64Trie . at k
+  trieAt k f (Int64Trie x)      = fmap Int64Trie (at k f x)
   trieNull (Int64Trie x)        = Map.null x
   trieEmpty                     = Int64Trie Map.empty
   trieITraverse f (Int64Trie x) = fmap Int64Trie (itraversed f x)
@@ -227,7 +229,7 @@ instance TrieKey Int64 where
 
 newtype instance Trie Word8 a = Word8Trie (IntMap a)
 instance TrieKey Word8 where
-  trieAt k                      = iso (\(Word8Trie t) -> t) Word8Trie . at (fromEnum k)
+  trieAt k f (Word8Trie x)      = fmap Word8Trie (at (fromEnum k) f x)
   trieNull (Word8Trie x)        = IntMap.null x
   trieEmpty                     = Word8Trie IntMap.empty
   trieITraverse f (Word8Trie x) = fmap Word8Trie (reindexed (toEnum :: Int -> Word8) itraversed f x)
@@ -236,7 +238,7 @@ instance TrieKey Word8 where
 
 newtype instance Trie Word16 a = Word16Trie (IntMap a)
 instance TrieKey Word16 where
-  trieAt k                       = iso (\(Word16Trie t) -> t) Word16Trie . at (fromEnum k)
+  trieAt k f (Word16Trie x)      = fmap Word16Trie (at (fromEnum k) f x)
   trieNull (Word16Trie x)        = IntMap.null x
   trieEmpty                      = Word16Trie IntMap.empty
   trieITraverse f (Word16Trie x) = fmap Word16Trie (reindexed (toEnum :: Int -> Word16) itraversed f x)
@@ -245,7 +247,7 @@ instance TrieKey Word16 where
 
 newtype instance Trie Word32 a = Word32Trie (Map Word32 a)
 instance TrieKey Word32 where
-  trieAt k                       = iso (\(Word32Trie t) -> t) Word32Trie . at k
+  trieAt k f (Word32Trie x)      = fmap Word32Trie (at k f x)
   trieNull (Word32Trie x)        = Map.null x
   trieEmpty                      = Word32Trie Map.empty
   trieITraverse f (Word32Trie x) = fmap Word32Trie (itraversed f x)
@@ -377,6 +379,9 @@ gtrieIso ::
 gtrieIso = iso Data.Coerce.coerce coerce'
 {-# INLINE gtrieIso #-}
 
+
+-- This version of 'coerce' exists to work around a limitation
+-- of the 'Coercible' solver by flipping the arguments to the constraint.
 coerce' :: forall a b. Coercible a b => b -> a
 coerce' = Data.Coerce.coerce (id :: a -> a)
 {-# INLINE coerce' #-}
