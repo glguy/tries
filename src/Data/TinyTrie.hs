@@ -20,24 +20,30 @@ module Data.TinyTrie
   (
   -- * Trie data family
     Trie(..)
+  , lookup
+  , alter
+  , insert
+  , delete
+  , fromList
   -- * Instance implementation details
   , TrieKey(..)
   -- * Generic implementation details
   , GTrieKey(..)
   , GTrie(..)
-  , specific
   ) where
 
 
 import Data.Char (ord)
+import Data.Foldable (Foldable)
 import Data.IntMap (IntMap)
+import Data.List (foldl')
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
 import GHC.Generics
+import Prelude hiding (lookup)
+import qualified Data.Foldable as Foldable
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
-import qualified Data.Foldable as Foldable
-import Data.Foldable (Foldable)
 
 
 -- | Keys that support prefix-trie map operations.
@@ -347,14 +353,31 @@ instance GTrieKey V1 where
 -- Various helpers
 ------------------------------------------------------------------------------
 
+-- | Lookup an element in a trie
+lookup :: TrieKey k => k -> Trie k v -> Maybe v
+lookup = trieLookup
+{-# INLINE lookup #-}
+
+-- | Alter an element in a trie. The function is given the previous
+-- value, if it exists, and returns Just to set a value and Nothing to delete
+alter :: TrieKey k => (Maybe v -> Maybe v) -> k -> Trie k v -> Trie k v
+alter = trieAlter
+{-# INLINE alter #-}
+
+-- | Insert an element into the trie at the given key
 insert :: TrieKey k => k -> v -> Trie k v -> Trie k v
 insert k v = trieAlter (const (Just v)) k
+{-# INLINE insert #-}
 
+-- | Delete the element in a trie at the given key
 delete :: TrieKey k => k -> Trie k v -> Trie k v
 delete = trieAlter (const Nothing)
+{-# INLINE delete #-}
 
+-- | Construct a trie from a list of key/value pairs
 fromList :: TrieKey k => [(k,v)] -> Trie k v
-fromList = foldr (uncurry insert) trieEmpty
+fromList = foldl' (\acc (k,v) -> insert k v acc) trieEmpty
+{-# INLINE fromList #-}
 
 ------------------------------------------------------------------------------
 -- Various instances for Trie
