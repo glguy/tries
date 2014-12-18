@@ -15,7 +15,7 @@ homepage:            http://github.com/glguy/tries
 bug-reports:         http://github.com/glguy/tries/issues
 
 library
-  exposed-modules:     Data.Trie
+  exposed-modules:     Data.Trie, Data.TinyTrie
 
   other-extensions:    FlexibleContexts,
                        FlexibleInstances,
