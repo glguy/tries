@@ -71,7 +71,7 @@ class TrieKey k where
   trieAt :: Functor f => k -> LensLike' f (Trie k a) (Maybe a)
 
   -- | Implementation of 'show' method
-  trieShow :: Show a => Trie k a -> String
+  trieShowsPrec :: Show a => Int -> Trie k a -> ShowS
 
 
   -- Defaults using 'Generic'
@@ -90,10 +90,10 @@ class TrieKey k where
     k -> LensLike' f (Trie k a) (Maybe a)
   trieAt k f (MkTrie x) = fmap MkTrie (gtrieAt (GHC.Generics.from k) f x)
 
-  default trieShow ::
+  default trieShowsPrec ::
     (Show a, GTrieKey (Rep k), TrieRep k a ~ GTrie (Rep k) a) =>
-    Trie k a -> String
-  trieShow (MkTrie x) = gtrieShow x
+    Int -> Trie k a -> ShowS
+  trieShowsPrec p (MkTrie x) = showsPrec p x
 
   {-# INLINE trieNull #-}
   {-# INLINE trieEmpty #-}
@@ -113,7 +113,7 @@ instance TrieKey Int where
   trieAt k f (MkTrie x)         = fmap MkTrie (at k f x)
   trieNull (MkTrie x)           = IntMap.null x
   trieEmpty                     = MkTrie IntMap.empty
-  trieShow (MkTrie x)           = show x
+  trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINE trieAt #-}
   {-# INLINE trieEmpty #-}
   {-# INLINE trieNull #-}
@@ -123,7 +123,7 @@ instance TrieKey Integer where
   trieAt k f (MkTrie x)         = fmap MkTrie (at k f x)
   trieNull (MkTrie x)           = Map.null x
   trieEmpty                     = MkTrie Map.empty
-  trieShow (MkTrie x)           = show x
+  trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINE trieAt #-}
   {-# INLINE trieEmpty #-}
   {-# INLINE trieNull #-}
@@ -133,7 +133,7 @@ instance TrieKey Char where
   trieAt k f (MkTrie x)         = fmap MkTrie (at (ord k) f x)
   trieNull (MkTrie x)           = IntMap.null x
   trieEmpty                     = MkTrie IntMap.empty
-  trieShow (MkTrie x)           = show x
+  trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINE trieAt #-}
   {-# INLINE trieEmpty #-}
   {-# INLINE trieNull #-}
@@ -166,10 +166,10 @@ data    instance GTrie V1         a     = VTrie
 -- | TrieKey operations on Generic representations used to provide
 -- the default implementations of tries.
 class GTrieKey f where
-  gtrieAt    :: Functor g => f () -> LensLike' g (GTrie f a) (Maybe a)
-  gtrieNull  :: GTrie f a -> Bool
-  gtrieEmpty :: GTrie f a
-  gtrieShow  :: Show a => GTrie f a -> String
+  gtrieAt        :: Functor g => f () -> LensLike' g (GTrie f a) (Maybe a)
+  gtrieNull      :: GTrie f a -> Bool
+  gtrieEmpty     :: GTrie f a
+  gtrieShowsPrec :: Show a => Int -> GTrie f a -> ShowS
 
 ------------------------------------------------------------------------------
 -- Generic implementation for metadata
@@ -179,7 +179,7 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gtrieAt (M1 k) f (MTrie x)    = fmap MTrie (gtrieAt k f x)
   gtrieNull (MTrie x)           = gtrieNull x
   gtrieEmpty                    = MTrie gtrieEmpty
-  gtrieShow (MTrie x)           = gtrieShow x
+  gtrieShowsPrec p (MTrie x)    = showsPrec p x
   {-# INLINE gtrieAt #-}
   {-# INLINE gtrieNull #-}
   {-# INLINE gtrieEmpty #-}
@@ -193,7 +193,7 @@ instance TrieKey k => GTrieKey (K1 i k) where
   gtrieAt (K1 k) f (KTrie x)    = fmap KTrie (trieAt k f x)
   gtrieEmpty                    = KTrie trieEmpty
   gtrieNull (KTrie x)           = trieNull x
-  gtrieShow (KTrie x)           = trieShow x
+  gtrieShowsPrec p (KTrie x)    = showsPrec p x
   {-# INLINE gtrieAt #-}
   {-# INLINE gtrieNull #-}
   {-# INLINE gtrieEmpty #-}
@@ -209,7 +209,7 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
 
   gtrieEmpty                    = PTrie gtrieEmpty
   gtrieNull (PTrie x)           = gtrieNull x
-  gtrieShow (PTrie x)           = gtrieShow x
+  gtrieShowsPrec p (PTrie x)    = showsPrec p x
   {-# INLINE gtrieAt #-}
   {-# INLINE gtrieNull #-}
   {-# INLINE gtrieEmpty #-}
@@ -225,8 +225,11 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   gtrieAt (R1 k) f (STrie x y)  = fmap (x `STrie`) (gtrieAt k f y)
   gtrieEmpty                    = STrie gtrieEmpty gtrieEmpty
   gtrieNull (STrie m1 m2)       = gtrieNull m1 && gtrieNull m2
-  gtrieShow (STrie x y)         = "(" ++ gtrieShow x ++ ") + ("
-                                      ++ gtrieShow y ++ ")"
+  gtrieShowsPrec p (STrie x y)  = showParen (p > 10)
+                                $ showString "STrie "
+                                . showsPrec 11 x
+                                . showString " "
+                                . showsPrec 11 y
   {-# INLINE gtrieAt #-}
   {-# INLINE gtrieEmpty #-}
   {-# INLINE gtrieNull #-}
@@ -238,8 +241,8 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
 instance GTrieKey U1 where
   gtrieAt _ f (UTrie x)         = fmap UTrie (f x)
   gtrieEmpty                    = UTrie Nothing
-  gtrieNull (UTrie u)           = isNothing u
-  gtrieShow (UTrie u)           = show u
+  gtrieNull (UTrie x)           = isNothing x
+  gtrieShowsPrec p (UTrie x)    = showsPrec p x
   {-# INLINE gtrieAt #-}
   {-# INLINE gtrieEmpty #-}
   {-# INLINE gtrieNull #-}
@@ -252,7 +255,7 @@ instance GTrieKey V1 where
   gtrieAt k _ _                 = k `seq` error "GTrieKey.V1: gtrieAt"
   gtrieEmpty                    = VTrie
   gtrieNull _                   = True
-  gtrieShow _                   = "()"
+  gtrieShowsPrec _ _            = showString "VTrie"
   {-# INLINE gtrieAt #-}
   {-# INLINE gtrieEmpty #-}
   {-# INLINE gtrieNull #-}
@@ -261,8 +264,11 @@ instance GTrieKey V1 where
 -- Various instances for Trie
 ------------------------------------------------------------------------------
 
-instance (Show a, TrieKey  k) => Show (Trie  k a) where show = trieShow
-instance (Show a, GTrieKey f) => Show (GTrie f a) where show = gtrieShow
+instance (Show a, TrieKey  k) => Show (Trie  k a) where
+  showsPrec = trieShowsPrec
+
+instance (Show a, GTrieKey f) => Show (GTrie f a) where
+  showsPrec = gtrieShowsPrec
 
 type instance IxValue (Trie k a) = a
 type instance Index   (Trie k a) = k
