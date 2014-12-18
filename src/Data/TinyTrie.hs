@@ -152,6 +152,21 @@ instance TrieKey Char where
   {-# INLINE trieEmpty #-}
   {-# INLINE trieNull #-}
 
+newtype OrdKey k = OrdKey k
+instance (Show k, Ord k) => TrieKey (OrdKey k) where
+  type TrieRep (OrdKey k) a     = Map k a
+  trieLookup (OrdKey k)   (MkTrie x) =         Map.lookup k   x
+  trieDelete (OrdKey k)   (MkTrie x) = MkTrie (Map.delete k   x)
+  trieInsert (OrdKey k) v (MkTrie x) = MkTrie (Map.insert k v x)
+  trieNull (MkTrie x)           = Map.null x
+  trieEmpty                     = MkTrie Map.empty
+  trieShowsPrec p (MkTrie x)    = showsPrec p x
+  {-# INLINE trieLookup #-}
+  {-# INLINE trieDelete #-}
+  {-# INLINE trieInsert #-}
+  {-# INLINE trieEmpty #-}
+  {-# INLINE trieNull #-}
+
 ------------------------------------------------------------------------------
 -- Automatically derived instances for common types
 ------------------------------------------------------------------------------
