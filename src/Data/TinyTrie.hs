@@ -25,13 +25,14 @@ module Data.TinyTrie
   -- * Generic implementation details
   , GTrieKey(..)
   , GTrie(..)
+  , specific
   ) where
 
 
 import Data.Char (ord)
 import Data.IntMap (IntMap)
 import Data.Map (Map)
-import Data.Maybe (isNothing)
+import Data.Maybe (fromMaybe)
 import GHC.Generics
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
@@ -47,23 +48,27 @@ class TrieKey k where
   -- | Type of the representation of tries for this key.
   type TrieRep k a
 
-  -- | Half implementation of '_Empty' method
+  -- | Construct an empty trie
   trieEmpty :: Trie k a
 
   -- | Lookup element from trie
   trieLookup :: k -> Trie k a -> Maybe a
 
+  -- | Alter the value at a key.
   trieAlter :: (Maybe a -> Maybe a) -> k -> Trie k a -> Trie k a
 
+  -- | Apply a function to all values stored in a trie
   trieMap :: (a -> b) -> Trie k a -> Trie k b
 
+  -- | Fold all the values store in a trie
   trieFold :: (a -> b -> b) -> Trie k a -> b -> b
 
-  -- | Implementation of 'show' method
+  -- | Show the representation of a trie
   trieShowsPrec :: Show a => Int -> Trie k a -> ShowS
 
 
   -- Defaults using 'Generic'
+
   type instance TrieRep k a = GTrie (Rep k) a
 
   default trieEmpty ::
@@ -94,6 +99,12 @@ class TrieKey k where
     (Show a, GTrieKey (Rep k), TrieRep k a ~ GTrie (Rep k) a) =>
     Int -> Trie k a -> ShowS
   trieShowsPrec p (MkTrie x) = showsPrec p x
+
+  {-# INLINE trieLookup #-}
+  {-# INLINE trieAlter #-}
+  {-# INLINE trieEmpty #-}
+  {-# INLINE trieMap #-}
+  {-# INLINE trieFold #-}
 
 
 -- | Effectively associated datatype of tries indexable by keys of type @k@.
@@ -160,6 +171,7 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
   {-# INLINE trieEmpty #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
+  {-# INLINE trieShowsPrec #-}
 
 ------------------------------------------------------------------------------
 -- Automatically derived instances for common types
@@ -189,8 +201,8 @@ data    instance GTrie V1         a     = VTrie
 -- | TrieKey operations on Generic representations used to provide
 -- the default implementations of tries.
 class GTrieKey f where
-  gtrieLookup    :: f () -> GTrie f a -> Maybe a
-  gtrieAlter     :: (Maybe a -> Maybe a) -> f () -> GTrie f a -> GTrie f a
+  gtrieLookup    :: f p -> GTrie f a -> Maybe a
+  gtrieAlter     :: (Maybe a -> Maybe a) -> f p -> GTrie f a -> GTrie f a
   gtrieEmpty     :: GTrie f a
   gtrieMap       :: (a -> b) -> GTrie f a -> GTrie f b
   gtrieFold      :: (a -> b -> b) -> GTrie f a -> b -> b
@@ -243,9 +255,9 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
 
   gtrieAlter f (i :*: j) (PTrie x)      = PTrie (gtrieAlter alterJ i x)
     where
-    -- possible laziness issue here
-    alterJ Nothing                      = Just (gtrieAlter f j gtrieEmpty)
-    alterJ (Just t)                     = Just (gtrieAlter f j t)
+    alterJ = (Just $!)
+           . gtrieAlter f j
+           . fromMaybe gtrieEmpty
 
   gtrieEmpty                            = PTrie gtrieEmpty
   gtrieMap f (PTrie x)                  = PTrie (gtrieMap (gtrieMap f) x)
@@ -340,6 +352,9 @@ insert k v = trieAlter (const (Just v)) k
 
 delete :: TrieKey k => k -> Trie k v -> Trie k v
 delete = trieAlter (const Nothing)
+
+fromList :: TrieKey k => [(k,v)] -> Trie k v
+fromList = foldr (uncurry insert) trieEmpty
 
 ------------------------------------------------------------------------------
 -- Various instances for Trie
