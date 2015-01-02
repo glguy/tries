@@ -1,4 +1,4 @@
-name:                tries
+name:                generic-trie
 version:             0.1
 synopsis:            A map, where the keys may be complex structured data.
 description:         This type implements maps where the keys are themeselves
@@ -20,17 +20,7 @@ homepage:            http://github.com/glguy/tries
 bug-reports:         http://github.com/glguy/tries/issues
 
 library
-  exposed-modules:     Data.TinyTrie
-
-  other-extensions:    FlexibleContexts,
-                       FlexibleInstances,
-                       DefaultSignatures,
-                       TypeOperators,
-                       TypeFamilies,
-                       RankNTypes,
-                       ScopedTypeVariables,
-                       MultiParamTypeClasses
-
+  exposed-modules:     Data.GenericTrie
   build-depends:       base, containers
   GHC-options:         -O2 -Wall
 

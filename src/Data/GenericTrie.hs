@@ -16,7 +16,7 @@ instance 'TrieKey' Demo
 
 -}
 
-module Data.TinyTrie
+module Data.GenericTrie
   (
   -- * Trie data family
     Trie(..)
