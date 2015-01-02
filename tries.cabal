@@ -1,15 +1,20 @@
 name:                tries
 version:             0.1
-synopsis:            Simple prefix trie library with generics-driven instance generation
--- description:         
+synopsis:            A map, where the keys may be complex structured data.
+description:         This type implements maps where the keys are themeselves
+                     complexs strucutured data.  For example, the keys may be
+                     the abstract syntax trees for a programming language.
+                     The map is implemented as a trie, so common parts of the
+                     keys will be shared in the representation.  The library
+                     provides a generic implementation of the data strucutre,
+                     so values of types that have support for 'Generic' may
+                     be automatically used as keys in the map.
 license:             BSD3
 license-file:        LICENSE
 author:              Eric Mertens
 maintainer:          emertens@gmail.com
--- copyright:           
 category:            Data
 build-type:          Simple
--- extra-source-files:  
 cabal-version:       >=1.10
 homepage:            http://github.com/glguy/tries
 bug-reports:         http://github.com/glguy/tries/issues
@@ -26,8 +31,8 @@ library
                        ScopedTypeVariables,
                        MultiParamTypeClasses
 
-  build-depends:       base >=4.7 && <4.8,
-                       containers >=0.5 && <0.6
+  build-depends:       base, containers
+  GHC-options:         -O2 -Wall
 
   hs-source-dirs:      src
   default-language:    Haskell2010
