@@ -16,7 +16,7 @@ instance 'TrieKey' Demo
 
 -}
 
-module Data.TinyTrie
+module Data.GenericTrie
   (
   -- * Trie data family
     Trie(..)
@@ -284,8 +284,8 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
 instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
 
   gtrieLookup _      STrie0             = Nothing
-  gtrieLookup (L1 k) (STrie x y)        = gtrieLookup k x
-  gtrieLookup (R1 k) (STrie x y)        = gtrieLookup k y
+  gtrieLookup (L1 k) (STrie x _)        = gtrieLookup k x
+  gtrieLookup (R1 k) (STrie _ y)        = gtrieLookup k y
 
   gtrieAlter f k      STrie0            = gtrieAlter f k gtrieEmpty
   gtrieAlter f (L1 k) (STrie x y)       = STrie (gtrieAlter f k x) y
