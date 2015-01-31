@@ -291,7 +291,7 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   gtrieAlter f (L1 k) (STrie x y)       = STrie (gtrieAlter f k x) y
   gtrieAlter f (R1 k) (STrie x y)       = STrie x (gtrieAlter f k y)
 
-  gtrieEmpty                            = STrie gtrieEmpty gtrieEmpty
+  gtrieEmpty                            = STrie0
 
   gtrieMap _ STrie0                     = STrie0
   gtrieMap f (STrie x y)                = STrie (gtrieMap f x) (gtrieMap f y)
