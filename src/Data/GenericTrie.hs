@@ -38,7 +38,7 @@ import Data.Foldable (Foldable)
 import Data.IntMap (IntMap)
 import Data.List (foldl')
 import Data.Map (Map)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isNothing)
 import GHC.Generics
 import Prelude hiding (lookup)
 import qualified Data.Foldable as Foldable
@@ -56,6 +56,9 @@ class TrieKey k where
 
   -- | Construct an empty trie
   trieEmpty :: Trie k a
+
+  -- | Test for an empty trie
+  trieNull :: Trie k a -> Bool
 
   -- | Lookup element from trie
   trieLookup :: k -> Trie k a -> Maybe a
@@ -80,6 +83,10 @@ class TrieKey k where
   default trieEmpty ::
     (GTrieKey (Rep k), TrieRep k a ~ GTrie (Rep k) a) => Trie k a
   trieEmpty = MkTrie gtrieEmpty
+
+  default trieNull ::
+    (GTrieKey (Rep k), TrieRep k a ~ GTrie (Rep k) a) => Trie k a -> Bool
+  trieNull (MkTrie x) = gtrieNull x
 
   default trieAlter ::
     ( GTrieKey (Rep k), Generic k, TrieRep k a ~ GTrie (Rep k) a) =>
@@ -109,6 +116,7 @@ class TrieKey k where
   {-# INLINE trieLookup #-}
   {-# INLINE trieAlter #-}
   {-# INLINE trieEmpty #-}
+  {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
 
@@ -126,12 +134,14 @@ instance TrieKey Int where
   trieLookup k (MkTrie x)       = IntMap.lookup k x
   trieAlter f k (MkTrie x)      = MkTrie (IntMap.alter f k x)
   trieEmpty                     = MkTrie IntMap.empty
+  trieNull (MkTrie x)           = IntMap.null x
   trieMap f (MkTrie x)          = MkTrie (IntMap.map f x)
   trieFold f (MkTrie x) z       = IntMap.foldr f z x
   trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINE trieLookup #-}
   {-# INLINE trieAlter #-}
   {-# INLINE trieEmpty #-}
+  {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
 
@@ -140,12 +150,14 @@ instance TrieKey Integer where
   trieLookup k   (MkTrie x)     = Map.lookup k x
   trieAlter f k (MkTrie x)      = MkTrie (Map.alter f k x)
   trieEmpty                     = MkTrie Map.empty
+  trieNull (MkTrie x)           = Map.null x
   trieMap f (MkTrie x)          = MkTrie (Map.map f x)
   trieFold f (MkTrie x) z       = Map.foldr f z x
   trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINE trieLookup #-}
   {-# INLINE trieAlter #-}
   {-# INLINE trieEmpty #-}
+  {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
 
@@ -154,12 +166,14 @@ instance TrieKey Char where
   trieLookup k (MkTrie x)       = IntMap.lookup (ord k) x
   trieAlter f k (MkTrie x)      = MkTrie (IntMap.alter f (ord k) x)
   trieEmpty                     = MkTrie IntMap.empty
+  trieNull (MkTrie x)           = IntMap.null x
   trieMap f (MkTrie x)          = MkTrie (IntMap.map f x)
   trieFold f (MkTrie x) z       = IntMap.foldr f z x
   trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINE trieLookup #-}
   {-# INLINE trieAlter #-}
   {-# INLINE trieEmpty #-}
+  {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
 
@@ -169,12 +183,14 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
   trieLookup (OrdKey k) (MkTrie x)      = Map.lookup k x
   trieAlter f (OrdKey k) (MkTrie x)     = MkTrie (Map.alter f k x)
   trieEmpty                             = MkTrie Map.empty
+  trieNull (MkTrie x)                   = Map.null x
   trieMap f (MkTrie x)                  = MkTrie (Map.map f x)
   trieFold f (MkTrie x) z               = Map.foldr f z x
   trieShowsPrec p (MkTrie x)            = showsPrec p x
   {-# INLINE trieLookup #-}
   {-# INLINE trieAlter #-}
   {-# INLINE trieEmpty #-}
+  {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
   {-# INLINE trieShowsPrec #-}
@@ -210,6 +226,7 @@ class GTrieKey f where
   gtrieLookup    :: f p -> GTrie f a -> Maybe a
   gtrieAlter     :: (Maybe a -> Maybe a) -> f p -> GTrie f a -> GTrie f a
   gtrieEmpty     :: GTrie f a
+  gtrieNull      :: GTrie f a -> Bool
   gtrieMap       :: (a -> b) -> GTrie f a -> GTrie f b
   gtrieFold      :: (a -> b -> b) -> GTrie f a -> b -> b
   gtrieShowsPrec :: Show a => Int -> GTrie f a -> ShowS
@@ -222,12 +239,14 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gtrieLookup (M1 k) (MTrie x)  = gtrieLookup k x
   gtrieAlter f (M1 k) (MTrie x) = MTrie (gtrieAlter f k x)
   gtrieEmpty                    = MTrie gtrieEmpty
+  gtrieNull (MTrie x)           = gtrieNull x
   gtrieMap f (MTrie x)          = MTrie (gtrieMap f x)
   gtrieFold f (MTrie x)         = gtrieFold f x
   gtrieShowsPrec p (MTrie x)    = showsPrec p x
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieEmpty #-}
+  {-# INLINE gtrieNull #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieShowsPrec #-}
@@ -241,12 +260,14 @@ instance TrieKey k => GTrieKey (K1 i k) where
   gtrieLookup (K1 k) (KTrie x)          = trieLookup k x
   gtrieAlter f (K1 k) (KTrie x)         = KTrie (trieAlter f k x)
   gtrieEmpty                            = KTrie trieEmpty
+  gtrieNull (KTrie x)                   = trieNull x
   gtrieMap f (KTrie x)                  = KTrie (trieMap f x)
   gtrieFold f (KTrie x )                = trieFold f x
   gtrieShowsPrec p (KTrie x)            = showsPrec p x
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieEmpty #-}
+  {-# INLINE gtrieNull #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieShowsPrec #-}
@@ -261,17 +282,18 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
 
   gtrieAlter f (i :*: j) (PTrie x)      = PTrie (gtrieAlter alterJ i x)
     where
-    alterJ = (Just $!)
-           . gtrieAlter f j
-           . fromMaybe gtrieEmpty
+    alterJ m = let m' = gtrieAlter f j (fromMaybe gtrieEmpty m)
+               in if gtrieNull m' then Nothing else Just m'
 
   gtrieEmpty                            = PTrie gtrieEmpty
+  gtrieNull (PTrie x)                   = gtrieNull x
   gtrieMap f (PTrie x)                  = PTrie (gtrieMap (gtrieMap f) x)
   gtrieFold f (PTrie x)                 = gtrieFold (gtrieFold f) x
   gtrieShowsPrec p (PTrie x)            = showsPrec p x
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieEmpty #-}
+  {-# INLINE gtrieNull #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieShowsPrec #-}
@@ -283,15 +305,23 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
 
 instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
 
-  gtrieLookup _      STrie0             = Nothing
   gtrieLookup (L1 k) (STrie x _)        = gtrieLookup k x
   gtrieLookup (R1 k) (STrie _ y)        = gtrieLookup k y
+  gtrieLookup _      STrie0             = Nothing
 
-  gtrieAlter f k      STrie0            = gtrieAlter f k gtrieEmpty
   gtrieAlter f (L1 k) (STrie x y)       = STrie (gtrieAlter f k x) y
   gtrieAlter f (R1 k) (STrie x y)       = STrie x (gtrieAlter f k y)
+  gtrieAlter f (L1 k) STrie0            = let m = gtrieAlter f k gtrieEmpty
+                                          in if gtrieNull m then STrie0
+                                                            else STrie m gtrieEmpty
+  gtrieAlter f (R1 k) STrie0            = let m = gtrieAlter f k gtrieEmpty
+                                          in if gtrieNull m then STrie0
+                                                            else STrie gtrieEmpty m
 
   gtrieEmpty                            = STrie0
+
+  gtrieNull STrie0                      = True
+  gtrieNull STrie{}                     = False
 
   gtrieMap _ STrie0                     = STrie0
   gtrieMap f (STrie x y)                = STrie (gtrieMap f x) (gtrieMap f y)
@@ -308,6 +338,7 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieEmpty #-}
+  {-# INLINE gtrieNull #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieShowsPrec #-}
@@ -320,6 +351,7 @@ instance GTrieKey U1 where
   gtrieLookup _ (UTrie x)       = x
   gtrieAlter f _ (UTrie x)      = UTrie (f x)
   gtrieEmpty                    = UTrie Nothing
+  gtrieNull (UTrie x)           = isNothing x
   gtrieMap f (UTrie x)          = UTrie (fmap f x)
   gtrieFold _ (UTrie Nothing)   = id
   gtrieFold f (UTrie (Just x))  = f x
@@ -339,6 +371,7 @@ instance GTrieKey V1 where
   gtrieLookup k _               = k `seq` error "GTrieKey.V1: gtrieLookup"
   gtrieAlter _ k _              = k `seq` error "GTrieKey.V1: gtrieAlter"
   gtrieEmpty                    = VTrie
+  gtrieNull _                   = True
   gtrieMap _ _                  = VTrie
   gtrieFold _ _                 = id
   gtrieShowsPrec _ _            = showString "VTrie"
