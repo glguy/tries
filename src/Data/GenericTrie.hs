@@ -32,6 +32,8 @@ module Data.GenericTrie
   -- * Trie interface
     Trie(..)
   , alter
+  , member
+  , notMember
   , fromList
   , TrieKey(..)
   -- * Generic derivation implementation
@@ -47,7 +49,7 @@ import Data.Foldable (Foldable)
 import Data.IntMap (IntMap)
 import Data.List (foldl')
 import Data.Map (Map)
-import Data.Maybe (isNothing)
+import Data.Maybe (isNothing, isJust)
 import Data.Traversable (Traversable,traverse)
 import GHC.Generics
 import Prelude hiding (lookup)
@@ -79,6 +81,9 @@ class TrieKey k where
   -- | Delete element from trie
   delete :: k -> Trie k a -> Trie k a
 
+  -- | Construct a trie holding a single value
+  singleton :: k -> a -> Trie k a
+
   -- | Apply a function to all values stored in a trie
   trieMap :: (a -> b) -> Trie k a -> Trie k b
 
@@ -101,6 +106,13 @@ class TrieKey k where
     ) =>
     Trie k a
   empty = MkTrie Nothing
+
+  default singleton ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    k -> a -> Trie k a
+  singleton k v = MkTrie $ Just $! gtrieSingleton (from k) v
 
   default trieNull ::
     ( TrieRep k a ~ TrieRepDefault k a
@@ -188,6 +200,7 @@ instance TrieKey Int where
   insert k v (MkTrie t)         = MkTrie (IntMap.insert k v t)
   delete k (MkTrie t)           = MkTrie (IntMap.delete k t)
   empty                         = MkTrie IntMap.empty
+  singleton k v                 = MkTrie (IntMap.singleton k v)
   trieNull (MkTrie x)           = IntMap.null x
   trieMap f (MkTrie x)          = MkTrie (IntMap.map f x)
   trieFold f (MkTrie x) z       = IntMap.foldr f z x
@@ -209,6 +222,7 @@ instance TrieKey Integer where
   insert k v (MkTrie t)         = MkTrie (Map.insert k v t)
   delete k (MkTrie t)           = MkTrie (Map.delete k t)
   empty                         = MkTrie Map.empty
+  singleton k v                 = MkTrie (Map.singleton k v)
   trieNull (MkTrie x)           = Map.null x
   trieMap f (MkTrie x)          = MkTrie (Map.map f x)
   trieFold f (MkTrie x) z       = Map.foldr f z x
@@ -230,6 +244,7 @@ instance TrieKey Char where
   delete k (MkTrie t)           = MkTrie (IntMap.delete (ord k) t)
   insert k v (MkTrie t)         = MkTrie (IntMap.insert (ord k) v t)
   empty                         = MkTrie IntMap.empty
+  singleton k v                 = MkTrie (IntMap.singleton (ord k) v)
   trieNull (MkTrie x)           = IntMap.null x
   trieMap f (MkTrie x)          = MkTrie (IntMap.map f x)
   trieFold f (MkTrie x) z       = IntMap.foldr f z x
@@ -257,6 +272,7 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
   insert (OrdKey k) v (MkTrie x)        = MkTrie (Map.insert k v x)
   delete (OrdKey k) (MkTrie x)          = MkTrie (Map.delete k x)
   empty                                 = MkTrie Map.empty
+  singleton (OrdKey k) v                = MkTrie (Map.singleton k v)
   trieNull (MkTrie x)                   = Map.null x
   trieMap f (MkTrie x)                  = MkTrie (Map.map f x)
   trieFold f (MkTrie x) z               = Map.foldr f z x
@@ -357,7 +373,7 @@ instance GTrieKeyShow f => GTrieKeyShow (M1 S s f) where
 instance TrieKey k => GTrieKey (K1 i k) where
   gtrieLookup (K1 k) (KTrie x)          = lookup k x
   gtrieInsert (K1 k) v (KTrie t)        = KTrie (insert k v t)
-  gtrieSingleton (K1 k) v               = KTrie (insert k v empty)
+  gtrieSingleton (K1 k) v               = KTrie (singleton k v)
   gtrieDelete (K1 k) (KTrie t)          = let m = delete k t
                                           in if trieNull m then Nothing
                                                            else Just (KTrie m)
@@ -539,6 +555,14 @@ alter k f t =
   case f (lookup k t) of
     Just v' -> insert k v' t
     Nothing -> delete k t
+
+-- | Returns 'True' when the 'Trie' has a value stored at the given key.
+member :: TrieKey k => k -> Trie k a -> Bool
+member k t = isJust (lookup k t)
+
+-- | Returns 'False' when the 'Trie' has a value stored at the given key.
+notMember :: TrieKey k => k -> Trie k a -> Bool
+notMember k t = isNothing (lookup k t)
 
 ------------------------------------------------------------------------------
 -- Various instances for Trie

@@ -21,7 +21,8 @@ bug-reports:         http://github.com/glguy/tries/issues
 
 library
   exposed-modules:     Data.GenericTrie
-  build-depends:       base, containers
+  build-depends:       base             >= 4.5     && < 4.9,
+                       containers       >= 0.4.2.1 && < 0.6
   GHC-options:         -O2 -Wall
 
   hs-source-dirs:      src
