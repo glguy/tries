@@ -303,20 +303,21 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
 -- Generic implementation for sums
 ------------------------------------------------------------------------------
 
+strie :: (GTrieKey f, GTrieKey g) => GTrie f a -> GTrie g a -> GTrie (f :+: g) a
+strie x y
+  | gtrieNull x && gtrieNull y = STrie0
+  | otherwise                  = STrie x y
+
 instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
 
   gtrieLookup (L1 k) (STrie x _)        = gtrieLookup k x
   gtrieLookup (R1 k) (STrie _ y)        = gtrieLookup k y
   gtrieLookup _      STrie0             = Nothing
 
-  gtrieAlter f (L1 k) (STrie x y)       = STrie (gtrieAlter f k x) y
-  gtrieAlter f (R1 k) (STrie x y)       = STrie x (gtrieAlter f k y)
-  gtrieAlter f (L1 k) STrie0            = let m = gtrieAlter f k gtrieEmpty
-                                          in if gtrieNull m then STrie0
-                                                            else STrie m gtrieEmpty
-  gtrieAlter f (R1 k) STrie0            = let m = gtrieAlter f k gtrieEmpty
-                                          in if gtrieNull m then STrie0
-                                                            else STrie gtrieEmpty m
+  gtrieAlter f (L1 k) (STrie x y)       = strie (gtrieAlter f k x) y
+  gtrieAlter f (R1 k) (STrie x y)       = strie x (gtrieAlter f k y)
+  gtrieAlter f (L1 k) STrie0            = strie (gtrieAlter f k gtrieEmpty) gtrieEmpty
+  gtrieAlter f (R1 k) STrie0            = strie gtrieEmpty (gtrieAlter f k gtrieEmpty)
 
   gtrieEmpty                            = STrie0
 
