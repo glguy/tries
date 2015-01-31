@@ -7,6 +7,15 @@
 
 {- |
 
+This module implements an interface for working with "tries".
+A key in the trie represents a distinct path through the trie.
+This can provide benefits when using very large and possibly
+very similar keys where comparing for order can become
+expensive, and storing the various keys could be inefficient.
+
+For primitive types like 'Int', this library will select efficient
+implementations automatically.
+
 All methods of 'TrieKey' can be derived automatically using
 a 'Generic' instance.
 
@@ -20,23 +29,26 @@ instance 'TrieKey' Demo
 
 module Data.GenericTrie
   (
-  -- * Trie data family
+  -- * Trie interface
     Trie(..)
+  , alter
   , fromList
-  -- * Instance implementation details
   , TrieKey(..)
-  -- * Generic implementation details
+  -- * Generic derivation implementation
+  , TrieRepDefault
   , GTrieKey(..)
   , GTrie(..)
   ) where
 
 
+import Control.Applicative (Applicative, liftA2, pure)
 import Data.Char (ord)
 import Data.Foldable (Foldable)
 import Data.IntMap (IntMap)
 import Data.List (foldl')
 import Data.Map (Map)
-import Data.Maybe (fromMaybe, isNothing)
+import Data.Maybe (isNothing)
+import Data.Traversable (Traversable,traverse)
 import GHC.Generics
 import Prelude hiding (lookup)
 import qualified Data.Foldable as Foldable
@@ -73,6 +85,9 @@ class TrieKey k where
   -- | Fold all the values store in a trie
   trieFold :: (a -> b -> b) -> Trie k a -> b -> b
 
+  -- | Traverse the values stored in a trie
+  trieTraverse :: Applicative f => (a -> f b) -> Trie k a -> f (Trie k b)
+
   -- | Show the representation of a trie
   trieShowsPrec :: Show a => Int -> Trie k a -> ShowS
 
@@ -82,56 +97,83 @@ class TrieKey k where
   type instance TrieRep k a = TrieRepDefault k a
 
   default empty ::
-    (GTrieKey (Rep k), TrieRep k a ~ TrieRepDefault k a) => Trie k a
+    ( TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    Trie k a
   empty = MkTrie Nothing
 
   default trieNull ::
-    (GTrieKey (Rep k), TrieRep k a ~ TrieRepDefault k a) => Trie k a -> Bool
+    ( TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    Trie k a -> Bool
   trieNull (MkTrie mb) = isNothing mb
 
   default lookup ::
-    ( GTrieKey (Rep k), Generic k, TrieRep k a ~ TrieRepDefault k a) =>
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
     k -> Trie k a -> Maybe a
   lookup k (MkTrie t) = gtrieLookup (from k) =<< t
 
   default insert ::
-    ( GTrieKey (Rep k), Generic k, TrieRep k a ~ TrieRepDefault k a) =>
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
     k -> a -> Trie k a -> Trie k a
   insert k v (MkTrie Nothing)  = MkTrie (Just $! gtrieSingleton (from k) v)
   insert k v (MkTrie (Just t)) = MkTrie (Just $! gtrieInsert (from k) v t)
 
   default delete ::
-    ( GTrieKey (Rep k), Generic k, TrieRep k a ~ TrieRepDefault k a) =>
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
     k -> Trie k a -> Trie k a
   delete _ t@(MkTrie Nothing) = t
   delete k (MkTrie (Just t))  = MkTrie (gtrieDelete (from k) t)
 
   default trieMap ::
-    ( GTrieKey (Rep k), TrieRep k a ~ TrieRepDefault k a, TrieRep k b ~ TrieRepDefault k b) =>
+    ( GTrieKey (Rep k)
+    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k b ~ TrieRepDefault k b
+    ) =>
     (a -> b) -> Trie k a -> Trie k b
   trieMap f (MkTrie x) = MkTrie (fmap (gtrieMap f) $! x)
 
   default trieFold ::
-    ( GTrieKey (Rep k), TrieRep k a ~ TrieRepDefault k a) =>
+    ( GTrieKey (Rep k)
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
     (a -> b -> b) -> Trie k a -> b -> b
   trieFold f (MkTrie (Just x)) z = gtrieFold f x z
-  trieFold f (MkTrie Nothing) z = z
+  trieFold _ (MkTrie Nothing) z = z
+
+  default trieTraverse ::
+    ( GTrieKey (Rep k)
+    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k b ~ TrieRepDefault k b
+    , Applicative f
+    ) =>
+    (a -> f b) -> Trie k a -> f (Trie k b)
+  trieTraverse f (MkTrie x) = fmap MkTrie (traverse (gtrieTraverse f) x)
 
   default trieShowsPrec ::
-    (Show a, GTrieKeyShow (Rep k), TrieRep k a ~ TrieRepDefault k a) =>
+    ( Show a, GTrieKeyShow (Rep k)
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
     Int -> Trie k a -> ShowS
   trieShowsPrec p (MkTrie (Just x)) = showsPrec p x
-  trieShowsPrec p (MkTrie Nothing ) = showString "Empty"
+  trieShowsPrec _ (MkTrie Nothing ) = showString "()"
 
-  {-# INLINE lookup #-}
-  {-# INLINE empty #-}
-  {-# INLINE trieNull #-}
-  {-# INLINE trieMap #-}
-  {-# INLINE trieFold #-}
-
+-- | The default implementation of a 'TrieRep' is 'GTrie' wrapped in
+-- a 'Maybe'. This wrapping is due to the 'GTrie' being a non-empty
+-- trie allowing all the of the "emptiness" to be represented at the
+-- top level for any given generically implemented key.
 type TrieRepDefault k a = Maybe (GTrie (Rep k) a)
 
--- | Effectively associated datatype of tries indexable by keys of type @k@.
+-- | Effectively an associated datatype of tries indexable by keys of type @k@.
+-- By using a separate newtype wrapper around the associated type synonym we're
+-- able to use the same 'MkTrie' constructor for all of the generic
+-- implementations while still getting the injectivity of a new type.
 newtype Trie k a = MkTrie (TrieRep k a)
 
 
@@ -139,6 +181,7 @@ newtype Trie k a = MkTrie (TrieRep k a)
 -- Manually derived instances for base types
 ------------------------------------------------------------------------------
 
+-- | 'Int' tries are implemented with 'IntMap'.
 instance TrieKey Int where
   type TrieRep Int a            = IntMap a
   lookup k (MkTrie x)           = IntMap.lookup k x
@@ -148,12 +191,18 @@ instance TrieKey Int where
   trieNull (MkTrie x)           = IntMap.null x
   trieMap f (MkTrie x)          = MkTrie (IntMap.map f x)
   trieFold f (MkTrie x) z       = IntMap.foldr f z x
+  trieTraverse f (MkTrie x)     = fmap MkTrie (traverse f x)
   trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINE empty #-}
+  {-# INLINE insert #-}
+  {-# INLINE lookup #-}
+  {-# INLINE delete #-}
+  {-# INLINE trieTraverse #-}
   {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
 
+-- | 'Integer' tries are implemented with 'Map'.
 instance TrieKey Integer where
   type TrieRep Integer a        = Map Integer a
   lookup k (MkTrie t)           = Map.lookup k t
@@ -163,12 +212,18 @@ instance TrieKey Integer where
   trieNull (MkTrie x)           = Map.null x
   trieMap f (MkTrie x)          = MkTrie (Map.map f x)
   trieFold f (MkTrie x) z       = Map.foldr f z x
+  trieTraverse f (MkTrie x)     = fmap MkTrie (traverse f x)
   trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINE empty #-}
+  {-# INLINE insert #-}
+  {-# INLINE lookup #-}
+  {-# INLINE delete #-}
   {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
+  {-# INLINE trieTraverse #-}
 
+-- | 'Char tries are implemented with 'IntMap'.
 instance TrieKey Char where
   type TrieRep Char a           = IntMap a
   lookup k (MkTrie t)           = IntMap.lookup (ord k) t
@@ -178,13 +233,24 @@ instance TrieKey Char where
   trieNull (MkTrie x)           = IntMap.null x
   trieMap f (MkTrie x)          = MkTrie (IntMap.map f x)
   trieFold f (MkTrie x) z       = IntMap.foldr f z x
+  trieTraverse f (MkTrie x)     = fmap MkTrie (traverse f x)
   trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINE empty #-}
+  {-# INLINE insert #-}
+  {-# INLINE lookup #-}
+  {-# INLINE delete #-}
   {-# INLINE trieNull #-}
+  {-# INLINE trieTraverse #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
 
 newtype OrdKey k = OrdKey k
+  deriving (Read, Show, Eq, Ord)
+
+-- | 'OrdKey' tries are implemented with 'Map', this is
+-- intended for cases where it is better for some reason
+-- to force the use of a 'Map' than to use the generically
+-- derived structure.
 instance (Show k, Ord k) => TrieKey (OrdKey k) where
   type TrieRep (OrdKey k) a             = Map k a
   lookup (OrdKey k) (MkTrie x)          = Map.lookup k x
@@ -194,11 +260,16 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
   trieNull (MkTrie x)                   = Map.null x
   trieMap f (MkTrie x)                  = MkTrie (Map.map f x)
   trieFold f (MkTrie x) z               = Map.foldr f z x
+  trieTraverse f (MkTrie x)             = fmap MkTrie (traverse f x)
   trieShowsPrec p (MkTrie x)            = showsPrec p x
   {-# INLINE empty #-}
+  {-# INLINE insert #-}
+  {-# INLINE lookup #-}
+  {-# INLINE delete #-}
   {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
+  {-# INLINE trieTraverse #-}
   {-# INLINE trieShowsPrec #-}
 
 ------------------------------------------------------------------------------
@@ -217,7 +288,7 @@ instance TrieKey k                         => TrieKey [k]
 -- Generic implementation class
 ------------------------------------------------------------------------------
 
--- | Generic Trie structures
+-- | Mapping of generic representation of keys to trie structures.
 data    family   GTrie (f :: * -> *) a
 newtype instance GTrie (M1 i c f) a     = MTrie { unMTrie :: GTrie f a }
 data    instance GTrie (f :+: g)  a     = STrieL !(GTrie f a) | STrieR !(GTrie g a)
@@ -236,7 +307,11 @@ class GTrieKey f where
   gtrieDelete    :: f p -> GTrie f a -> Maybe (GTrie f a)
   gtrieMap       :: (a -> b) -> GTrie f a -> GTrie f b
   gtrieFold      :: (a -> b -> b) -> GTrie f a -> b -> b
+  gtrieTraverse  :: Applicative m => (a -> m b) -> GTrie f a -> m (GTrie f b)
 
+-- | The 'GTrieKeyShow' class provides generic implementations
+-- of 'showsPrec'. This class is separate due to its implementation
+-- varying for diferent kinds of metadata.
 class GTrieKeyShow f where
   gtrieShowsPrec :: Show a => Int -> GTrie f a -> ShowS
 
@@ -244,6 +319,7 @@ class GTrieKeyShow f where
 -- Generic implementation for metadata
 ------------------------------------------------------------------------------
 
+-- | Generic metadata is skipped in trie representation and operations.
 instance GTrieKey f => GTrieKey (M1 i c f) where
   gtrieLookup (M1 k) (MTrie x)  = gtrieLookup k x
   gtrieInsert (M1 k) v (MTrie t)= MTrie (gtrieInsert k v t)
@@ -251,12 +327,14 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gtrieDelete (M1 k) (MTrie x)  = fmap MTrie (gtrieDelete k x)
   gtrieMap f (MTrie x)          = MTrie (gtrieMap f x)
   gtrieFold f (MTrie x)         = gtrieFold f x
+  gtrieTraverse f (MTrie x)     = fmap MTrie (gtrieTraverse f x)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieDelete #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
+  {-# INLINE gtrieTraverse #-}
 
 data MProxy c (f :: * -> *) a = MProxy
 
@@ -275,7 +353,7 @@ instance GTrieKeyShow f => GTrieKeyShow (M1 S s f) where
 -- Generic implementation for fields
 ------------------------------------------------------------------------------
 
-
+-- | Generic fields are represented by tries of the field type.
 instance TrieKey k => GTrieKey (K1 i k) where
   gtrieLookup (K1 k) (KTrie x)          = lookup k x
   gtrieInsert (K1 k) v (KTrie t)        = KTrie (insert k v t)
@@ -285,12 +363,14 @@ instance TrieKey k => GTrieKey (K1 i k) where
                                                            else Just (KTrie m)
   gtrieMap f (KTrie x)                  = KTrie (trieMap f x)
   gtrieFold f (KTrie x )                = trieFold f x
+  gtrieTraverse f (KTrie x)             = fmap KTrie (traverse f x)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieDelete #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
+  {-# INLINE gtrieTraverse #-}
 
 instance TrieKey k => GTrieKeyShow (K1 i k) where
   gtrieShowsPrec p (KTrie x)            = showsPrec p x
@@ -299,6 +379,7 @@ instance TrieKey k => GTrieKeyShow (K1 i k) where
 -- Generic implementation for products
 ------------------------------------------------------------------------------
 
+-- | Generic products are represented by tries of tries.
 instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
 
   gtrieLookup (i :*: j) (PTrie x)       = gtrieLookup j =<< gtrieLookup i x
@@ -313,12 +394,14 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   gtrieSingleton (i :*: j) v            = PTrie (gtrieSingleton i (gtrieSingleton j v))
   gtrieMap f (PTrie x)                  = PTrie (gtrieMap (gtrieMap f) x)
   gtrieFold f (PTrie x)                 = gtrieFold (gtrieFold f) x
+  gtrieTraverse f (PTrie x)             = fmap PTrie (gtrieTraverse (gtrieTraverse f) x)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
+  {-# INLINE gtrieTraverse #-}
 
 instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :*: g) where
   gtrieShowsPrec p (PTrie x)            = showsPrec p x
@@ -328,6 +411,7 @@ instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :*: g) where
 -- Generic implementation for sums
 ------------------------------------------------------------------------------
 
+-- | Generic sums are represented by up to a pair of sub-tries.
 instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
 
   gtrieLookup (L1 k) (STrieL x)         = gtrieLookup k x
@@ -365,11 +449,16 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   gtrieFold f (STrieL x)                = gtrieFold f x
   gtrieFold f (STrieR y)                = gtrieFold f y
 
+  gtrieTraverse f (STrieB x y)          = liftA2 STrieB (gtrieTraverse f x) (gtrieTraverse f y)
+  gtrieTraverse f (STrieL x)            = fmap STrieL (gtrieTraverse f x)
+  gtrieTraverse f (STrieR y)            = fmap STrieR (gtrieTraverse f y)
+
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieFold #-}
+  {-# INLINE gtrieTraverse #-}
   {-# INLINE gtrieMap #-}
 
 instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :+: g) where
@@ -389,6 +478,7 @@ instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :+: g) where
 -- Generic implementation for units
 ------------------------------------------------------------------------------
 
+-- | Tries of constructors without fields are represented by a single value.
 instance GTrieKey U1 where
   gtrieLookup _ (UTrie x)       = Just x
   gtrieInsert _ v _             = UTrie v
@@ -396,11 +486,13 @@ instance GTrieKey U1 where
   gtrieSingleton _              = UTrie
   gtrieMap f (UTrie x)          = UTrie (f x)
   gtrieFold f (UTrie x)         = f x
+  gtrieTraverse f (UTrie x)     = fmap UTrie (f x)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieFold #-}
+  {-# INLINE gtrieTraverse #-}
   {-# INLINE gtrieMap #-}
 
 instance GTrieKeyShow U1 where
@@ -410,6 +502,7 @@ instance GTrieKeyShow U1 where
 -- Generic implementation for empty types
 ------------------------------------------------------------------------------
 
+-- | Tries of types without constructors are represented by a unit.
 instance GTrieKey V1 where
   gtrieLookup k _               = k `seq` error "GTrieKey.V1: gtrieLookup"
   gtrieInsert k _ _             = k `seq` error "GTrieKey.V1: gtrieInsert"
@@ -417,15 +510,17 @@ instance GTrieKey V1 where
   gtrieSingleton k _            = k `seq` error "GTrieKey.V1: gtrieSingleton"
   gtrieMap _ _                  = VTrie
   gtrieFold _ _                 = id
+  gtrieTraverse _ _             = pure VTrie
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieMap #-}
+  {-# INLINE gtrieTraverse #-}
 
 instance GTrieKeyShow V1 where
-  gtrieShowsPrec _ _            = showString "VTrie"
+  gtrieShowsPrec _ _            = showString "()"
 
 ------------------------------------------------------------------------------
 -- Various helpers
@@ -435,6 +530,15 @@ instance GTrieKeyShow V1 where
 fromList :: TrieKey k => [(k,v)] -> Trie k v
 fromList = foldl' (\acc (k,v) -> insert k v acc) empty
 {-# INLINE fromList #-}
+
+-- | Alter the values of a trie. The function will take the value stored
+-- as the given key if one exists and should return a value to insert at
+-- that location or Nothing to delete from that location.
+alter :: TrieKey k => k -> (Maybe a -> Maybe a) -> Trie k a -> Trie k a
+alter k f t =
+  case f (lookup k t) of
+    Just v' -> insert k v' t
+    Nothing -> delete k t
 
 ------------------------------------------------------------------------------
 -- Various instances for Trie
@@ -451,3 +555,6 @@ instance TrieKey k => Functor (Trie k) where
 
 instance TrieKey k => Foldable (Trie k) where
   foldr f z t = trieFold f t z
+
+instance TrieKey k => Traversable (Trie k) where
+  traverse = trieTraverse
