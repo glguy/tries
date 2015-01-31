@@ -259,7 +259,8 @@ instance GTrieKeyShow f => GTrieKeyShow (M1 D d f) where
   gtrieShowsPrec p (MTrie x)    = showsPrec p x
 instance (Constructor c, GTrieKeyShow f) => GTrieKeyShow (M1 C c f) where
   gtrieShowsPrec p (MTrie x)    = showParen (p > 10)
-                                $ shows (conName (MProxy :: MProxy c f ()))
+                                $ showString "Con "
+                                . shows (conName (MProxy :: MProxy c f ()))
                                 . showString " "
                                 . showsPrec 11 x
 instance GTrieKeyShow f => GTrieKeyShow (M1 S s f) where
