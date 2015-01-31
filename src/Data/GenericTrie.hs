@@ -1,7 +1,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {- |
 
@@ -109,7 +111,7 @@ class TrieKey k where
   trieFold f (MkTrie x) = gtrieFold f x
 
   default trieShowsPrec ::
-    (Show a, GTrieKey (Rep k), TrieRep k a ~ GTrie (Rep k) a) =>
+    (Show a, GTrieKeyShow (Rep k), TrieRep k a ~ GTrie (Rep k) a) =>
     Int -> Trie k a -> ShowS
   trieShowsPrec p (MkTrie x) = showsPrec p x
 
@@ -229,6 +231,8 @@ class GTrieKey f where
   gtrieNull      :: GTrie f a -> Bool
   gtrieMap       :: (a -> b) -> GTrie f a -> GTrie f b
   gtrieFold      :: (a -> b -> b) -> GTrie f a -> b -> b
+
+class GTrieKeyShow f where
   gtrieShowsPrec :: Show a => Int -> GTrie f a -> ShowS
 
 ------------------------------------------------------------------------------
@@ -242,14 +246,24 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gtrieNull (MTrie x)           = gtrieNull x
   gtrieMap f (MTrie x)          = MTrie (gtrieMap f x)
   gtrieFold f (MTrie x)         = gtrieFold f x
-  gtrieShowsPrec p (MTrie x)    = showsPrec p x
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieEmpty #-}
   {-# INLINE gtrieNull #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
-  {-# INLINE gtrieShowsPrec #-}
+
+data MProxy c (f :: * -> *) a = MProxy
+
+instance GTrieKeyShow f => GTrieKeyShow (M1 D d f) where
+  gtrieShowsPrec p (MTrie x)    = showsPrec p x
+instance (Constructor c, GTrieKeyShow f) => GTrieKeyShow (M1 C c f) where
+  gtrieShowsPrec p (MTrie x)    = showParen (p > 10)
+                                $ shows (conName (MProxy :: MProxy c f ()))
+                                . showString " "
+                                . showsPrec 11 x
+instance GTrieKeyShow f => GTrieKeyShow (M1 S s f) where
+  gtrieShowsPrec p (MTrie x)    = showsPrec p x
 
 ------------------------------------------------------------------------------
 -- Generic implementation for fields
@@ -263,14 +277,15 @@ instance TrieKey k => GTrieKey (K1 i k) where
   gtrieNull (KTrie x)                   = trieNull x
   gtrieMap f (KTrie x)                  = KTrie (trieMap f x)
   gtrieFold f (KTrie x )                = trieFold f x
-  gtrieShowsPrec p (KTrie x)            = showsPrec p x
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieEmpty #-}
   {-# INLINE gtrieNull #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
-  {-# INLINE gtrieShowsPrec #-}
+
+instance TrieKey k => GTrieKeyShow (K1 i k) where
+  gtrieShowsPrec p (KTrie x)            = showsPrec p x
 
 ------------------------------------------------------------------------------
 -- Generic implementation for products
@@ -289,14 +304,15 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   gtrieNull (PTrie x)                   = gtrieNull x
   gtrieMap f (PTrie x)                  = PTrie (gtrieMap (gtrieMap f) x)
   gtrieFold f (PTrie x)                 = gtrieFold (gtrieFold f) x
-  gtrieShowsPrec p (PTrie x)            = showsPrec p x
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieEmpty #-}
   {-# INLINE gtrieNull #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
-  {-# INLINE gtrieShowsPrec #-}
+
+instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :*: g) where
+  gtrieShowsPrec p (PTrie x)            = showsPrec p x
 
 
 ------------------------------------------------------------------------------
@@ -330,19 +346,20 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   gtrieFold _ STrie0                    = id
   gtrieFold f (STrie x y)               = gtrieFold f x . gtrieFold f y
 
-  gtrieShowsPrec _ STrie0               = showString "STrie0"
-  gtrieShowsPrec p (STrie x y)          = showParen (p > 10)
-                                        $ showString "STrie "
-                                        . showsPrec 11 x
-                                        . showString " "
-                                        . showsPrec 11 y
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieEmpty #-}
   {-# INLINE gtrieNull #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieMap #-}
-  {-# INLINE gtrieShowsPrec #-}
+
+instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :+: g) where
+  gtrieShowsPrec _ STrie0               = showString "STrie0"
+  gtrieShowsPrec p (STrie x y)          = showParen (p > 10)
+                                        $ showString "STrie "
+                                        . showsPrec 11 x
+                                        . showString " "
+                                        . showsPrec 11 y
 
 ------------------------------------------------------------------------------
 -- Generic implementation for units
@@ -356,13 +373,14 @@ instance GTrieKey U1 where
   gtrieMap f (UTrie x)          = UTrie (fmap f x)
   gtrieFold _ (UTrie Nothing)   = id
   gtrieFold f (UTrie (Just x))  = f x
-  gtrieShowsPrec p (UTrie x)    = showsPrec p x
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieEmpty #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieMap #-}
-  {-# INLINE gtrieShowsPrec #-}
+
+instance GTrieKeyShow U1 where
+  gtrieShowsPrec p (UTrie x)    = showsPrec p x
 
 ------------------------------------------------------------------------------
 -- Generic implementation for empty types
@@ -375,13 +393,14 @@ instance GTrieKey V1 where
   gtrieNull _                   = True
   gtrieMap _ _                  = VTrie
   gtrieFold _ _                 = id
-  gtrieShowsPrec _ _            = showString "VTrie"
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieAlter #-}
   {-# INLINE gtrieEmpty #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieMap #-}
-  {-# INLINE gtrieShowsPrec #-}
+
+instance GTrieKeyShow V1 where
+  gtrieShowsPrec _ _            = showString "VTrie"
 
 ------------------------------------------------------------------------------
 -- Various helpers
@@ -420,7 +439,7 @@ fromList = foldl' (\acc (k,v) -> insert k v acc) trieEmpty
 instance (Show a, TrieKey  k) => Show (Trie  k a) where
   showsPrec = trieShowsPrec
 
-instance (Show a, GTrieKey f) => Show (GTrie f a) where
+instance (Show a, GTrieKeyShow f) => Show (GTrie f a) where
   showsPrec = gtrieShowsPrec
 
 instance TrieKey k => Functor (Trie k) where
