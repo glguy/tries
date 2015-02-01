@@ -306,7 +306,7 @@ instance TrieKey k                         => TrieKey [k]
 
 -- | Mapping of generic representation of keys to trie structures.
 data    family   GTrie (f :: * -> *) a
-newtype instance GTrie (M1 i c f) a     = MTrie { unMTrie :: GTrie f a }
+newtype instance GTrie (M1 i c f) a     = MTrie (GTrie f a)
 data    instance GTrie (f :+: g)  a     = STrieL !(GTrie f a) | STrieR !(GTrie g a)
                                         | STrieB !(GTrie f a) !(GTrie g a)
 newtype instance GTrie (f :*: g)  a     = PTrie (GTrie f (GTrie g a))
