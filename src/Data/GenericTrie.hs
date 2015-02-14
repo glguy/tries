@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-} -- allows the TypeRep default
 
 {- |
 
@@ -58,6 +59,7 @@ module Data.GenericTrie
 import Control.Applicative (Applicative, liftA2, pure)
 import Data.Char (ord)
 import Data.Foldable (Foldable)
+import Data.Functor.Compose (Compose(..))
 import Data.IntMap (IntMap)
 import Data.List (foldl')
 import Data.Map (Map)
@@ -76,7 +78,7 @@ import qualified Data.Map as Map
 class TrieKey k where
 
   -- | Type of the representation of tries for this key.
-  type TrieRep k a
+  type TrieRep k :: * -> *
 
   -- | Construct an empty trie
   empty :: Trie k a
@@ -115,67 +117,65 @@ class TrieKey k where
 
   -- Defaults using 'Generic'
 
-  type instance TrieRep k a = TrieRepDefault k a
+  type instance TrieRep k = TrieRepDefault k
 
   default empty ::
-    ( TrieRep k a ~ TrieRepDefault k a
+    ( TrieRep k ~ TrieRepDefault k
     ) =>
     Trie k a
   empty = genericEmpty
 
   default singleton ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> a -> Trie k a
   singleton = genericSingleton
 
   default trieNull ::
-    ( TrieRep k a ~ TrieRepDefault k a
+    ( TrieRep k ~ TrieRepDefault k
     ) =>
     Trie k a -> Bool
   trieNull = genericTrieNull
 
   default lookup ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> Trie k a -> Maybe a
   lookup = genericLookup
 
   default insert ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> a -> Trie k a -> Trie k a
   insert = genericInsert
 
   default delete ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> Trie k a -> Trie k a
   delete = genericDelete
 
   default trieMap ::
     ( GTrieKey (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
-    , TrieRep k b ~ TrieRepDefault k b
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     (a -> b) -> Trie k a -> Trie k b
   trieMap = genericTrieMap
 
   default trieFold ::
     ( GTrieKey (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     (a -> b -> b) -> Trie k a -> b -> b
   trieFold = genericTrieFold
 
   default trieTraverse ::
     ( GTrieKey (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
-    , TrieRep k b ~ TrieRepDefault k b
+    , TrieRep k ~ TrieRepDefault k
     , Applicative f
     ) =>
     (a -> f b) -> Trie k a -> f (Trie k b)
@@ -183,22 +183,21 @@ class TrieKey k where
 
   default trieShowsPrec ::
     ( Show a, GTrieKeyShow (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     Int -> Trie k a -> ShowS
   trieShowsPrec = genericTrieShowsPrec
 
   default select ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> Trie k a -> Trie k a
   select = genericSelect
 
   default mapMaybe ::
     ( GTrieKey (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
-    , TrieRep k b ~ TrieRepDefault k b
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     (a -> Maybe b) -> Trie k a -> Trie k b
   mapMaybe = genericMapMaybe
@@ -207,7 +206,7 @@ class TrieKey k where
 -- a 'Maybe'. This wrapping is due to the 'GTrie' being a non-empty
 -- trie allowing all the of the "emptiness" to be represented at the
 -- top level for any given generically implemented key.
-type TrieRepDefault k a = Maybe (GTrie (Rep k) a)
+type TrieRepDefault k = Compose Maybe (GTrie (Rep k))
 
 -- | Effectively an associated datatype of tries indexable by keys of type @k@.
 -- By using a separate newtype wrapper around the associated type synonym we're
@@ -222,7 +221,7 @@ newtype Trie k a = MkTrie (TrieRep k a)
 
 -- | 'Int' tries are implemented with 'IntMap'.
 instance TrieKey Int where
-  type TrieRep Int a            = IntMap a
+  type TrieRep Int              = IntMap
   lookup k (MkTrie x)           = IntMap.lookup k x
   insert k v (MkTrie t)         = MkTrie (IntMap.insert k v t)
   delete k (MkTrie t)           = MkTrie (IntMap.delete k t)
@@ -248,7 +247,7 @@ instance TrieKey Int where
 
 -- | 'Integer' tries are implemented with 'Map'.
 instance TrieKey Integer where
-  type TrieRep Integer a        = Map Integer a
+  type TrieRep Integer          = Map Integer
   lookup k (MkTrie t)           = Map.lookup k t
   insert k v (MkTrie t)         = MkTrie (Map.insert k v t)
   delete k (MkTrie t)           = MkTrie (Map.delete k t)
@@ -274,7 +273,7 @@ instance TrieKey Integer where
 
 -- | 'Char tries are implemented with 'IntMap'.
 instance TrieKey Char where
-  type TrieRep Char a           = IntMap a
+  type TrieRep Char             = IntMap
   lookup k (MkTrie t)           = IntMap.lookup (ord k) t
   delete k (MkTrie t)           = MkTrie (IntMap.delete (ord k) t)
   insert k v (MkTrie t)         = MkTrie (IntMap.insert (ord k) v t)
@@ -306,7 +305,7 @@ newtype OrdKey k = OrdKey k
 -- to force the use of a 'Map' than to use the generically
 -- derived structure.
 instance (Show k, Ord k) => TrieKey (OrdKey k) where
-  type TrieRep (OrdKey k) a             = Map k a
+  type TrieRep (OrdKey k)               = Map k
   lookup (OrdKey k) (MkTrie x)          = Map.lookup k x
   insert (OrdKey k) v (MkTrie x)        = MkTrie (Map.insert k v x)
   delete (OrdKey k) (MkTrie x)          = MkTrie (Map.delete k x)
@@ -350,93 +349,96 @@ instance TrieKey k                         => TrieKey [k]
 -- | Generic implementation of 'lookup'. This is the default implementation.
 genericLookup ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> Trie k a -> Maybe a
-genericLookup k (MkTrie t) = gtrieLookup (from k) =<< t
+genericLookup k (MkTrie (Compose t)) = gtrieLookup (from k) =<< t
 
 genericTrieNull ::
-    ( TrieRep k a ~ TrieRepDefault k a
+    ( TrieRep k ~ TrieRepDefault k
     ) =>
     Trie k a -> Bool
-genericTrieNull (MkTrie mb) = isNothing mb
+genericTrieNull (MkTrie (Compose mb)) = isNothing mb
 
 genericSingleton ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> a -> Trie k a
-genericSingleton k v = MkTrie $ Just $! gtrieSingleton (from k) v
+genericSingleton k v = MkTrie $ Compose $ Just $! gtrieSingleton (from k) v
 
 genericEmpty ::
-    ( TrieRep k a ~ TrieRepDefault k a
+    ( TrieRep k ~ TrieRepDefault k
     ) =>
     Trie k a
-genericEmpty = MkTrie Nothing
+genericEmpty = MkTrie (Compose Nothing)
 
 genericInsert ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> a -> Trie k a -> Trie k a
-genericInsert k v (MkTrie Nothing)  = MkTrie (Just $! gtrieSingleton (from k) v)
-genericInsert k v (MkTrie (Just t)) = MkTrie (Just $! gtrieInsert (from k) v t)
+genericInsert k v (MkTrie (Compose m)) =
+  case m of
+    Nothing -> MkTrie (Compose (Just $! gtrieSingleton (from k) v))
+    Just t  -> MkTrie (Compose (Just $! gtrieInsert (from k) v t))
 
 genericDelete ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> Trie k a -> Trie k a
-genericDelete _ t@(MkTrie Nothing) = t
-genericDelete k (MkTrie (Just t))  = MkTrie (gtrieDelete (from k) t)
+genericDelete k (MkTrie (Compose m)) = MkTrie (Compose (gtrieDelete (from k) =<< m))
 
 genericTrieMap ::
     ( GTrieKey (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
-    , TrieRep k b ~ TrieRepDefault k b
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     (a -> b) -> Trie k a -> Trie k b
-genericTrieMap f (MkTrie x) = MkTrie (fmap (gtrieMap f) $! x)
+genericTrieMap f (MkTrie (Compose x)) = MkTrie (Compose (fmap (gtrieMap f) $! x))
 
 genericTrieFold ::
     ( GTrieKey (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     (a -> b -> b) -> Trie k a -> b -> b
-genericTrieFold f (MkTrie (Just x)) z = gtrieFold f x z
-genericTrieFold _ (MkTrie Nothing) z = z
+genericTrieFold f (MkTrie (Compose m)) z =
+  case m of
+    Just x  -> gtrieFold f x z
+    Nothing -> z
 
 genericTrieTraverse ::
     ( GTrieKey (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
-    , TrieRep k b ~ TrieRepDefault k b
+    , TrieRep k ~ TrieRepDefault k
     , Applicative f
     ) =>
     (a -> f b) -> Trie k a -> f (Trie k b)
-genericTrieTraverse f (MkTrie x) = fmap MkTrie (traverse (gtrieTraverse f) x)
+genericTrieTraverse f (MkTrie (Compose x)) =
+  fmap (MkTrie . Compose) (traverse (gtrieTraverse f) x)
 
 genericTrieShowsPrec ::
     ( Show a, GTrieKeyShow (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     Int -> Trie k a -> ShowS
-genericTrieShowsPrec p (MkTrie (Just x)) = showsPrec p x
-genericTrieShowsPrec _ (MkTrie Nothing ) = showString "()"
+genericTrieShowsPrec p (MkTrie (Compose m)) =
+  case m of
+    Just x  -> showsPrec p x
+    Nothing -> showString "()"
 
 genericSelect ::
     ( GTrieKey (Rep k), Generic k
-    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> Trie k a -> Trie k a
-genericSelect k (MkTrie x) = MkTrie (gselect (from k) =<< x)
+genericSelect k (MkTrie (Compose x)) = MkTrie (Compose (gselect (from k) =<< x))
 
 genericMapMaybe ::
     ( GTrieKey (Rep k)
-    , TrieRep k a ~ TrieRepDefault k a
-    , TrieRep k b ~ TrieRepDefault k b
+    , TrieRep k ~ TrieRepDefault k
     ) =>
     (a -> Maybe b) -> Trie k a -> Trie k b
-genericMapMaybe f (MkTrie x) = MkTrie (gmapMaybe f =<< x)
+genericMapMaybe f (MkTrie (Compose x)) = MkTrie (Compose (gmapMaybe f =<< x))
 
 
 ------------------------------------------------------------------------------
