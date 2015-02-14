@@ -37,6 +37,18 @@ module Data.GenericTrie
   , fromList
   , TrieKey(..)
   -- * Generic derivation implementation
+  , genericTrieNull
+  , genericTrieMap
+  , genericTrieFold
+  , genericTrieTraverse
+  , genericTrieShowsPrec
+  , genericInsert
+  , genericLookup
+  , genericDelete
+  , genericSelect
+  , genericCatMaybes
+  , genericSingleton
+  , genericEmpty
   , TrieRepDefault
   , GTrieKey(..)
   , GTrie(..)
@@ -105,43 +117,41 @@ class TrieKey k where
     ( TrieRep k a ~ TrieRepDefault k a
     ) =>
     Trie k a
-  empty = MkTrie Nothing
+  empty = genericEmpty
 
   default singleton ::
     ( GTrieKey (Rep k), Generic k
     , TrieRep k a ~ TrieRepDefault k a
     ) =>
     k -> a -> Trie k a
-  singleton k v = MkTrie $ Just $! gtrieSingleton (from k) v
+  singleton = genericSingleton
 
   default trieNull ::
     ( TrieRep k a ~ TrieRepDefault k a
     ) =>
     Trie k a -> Bool
-  trieNull (MkTrie mb) = isNothing mb
+  trieNull = genericTrieNull
 
   default lookup ::
     ( GTrieKey (Rep k), Generic k
     , TrieRep k a ~ TrieRepDefault k a
     ) =>
     k -> Trie k a -> Maybe a
-  lookup k (MkTrie t) = gtrieLookup (from k) =<< t
+  lookup = genericLookup
 
   default insert ::
     ( GTrieKey (Rep k), Generic k
     , TrieRep k a ~ TrieRepDefault k a
     ) =>
     k -> a -> Trie k a -> Trie k a
-  insert k v (MkTrie Nothing)  = MkTrie (Just $! gtrieSingleton (from k) v)
-  insert k v (MkTrie (Just t)) = MkTrie (Just $! gtrieInsert (from k) v t)
+  insert = genericInsert
 
   default delete ::
     ( GTrieKey (Rep k), Generic k
     , TrieRep k a ~ TrieRepDefault k a
     ) =>
     k -> Trie k a -> Trie k a
-  delete _ t@(MkTrie Nothing) = t
-  delete k (MkTrie (Just t))  = MkTrie (gtrieDelete (from k) t)
+  delete = genericDelete
 
   default trieMap ::
     ( GTrieKey (Rep k)
@@ -149,15 +159,14 @@ class TrieKey k where
     , TrieRep k b ~ TrieRepDefault k b
     ) =>
     (a -> b) -> Trie k a -> Trie k b
-  trieMap f (MkTrie x) = MkTrie (fmap (gtrieMap f) $! x)
+  trieMap = genericTrieMap
 
   default trieFold ::
     ( GTrieKey (Rep k)
     , TrieRep k a ~ TrieRepDefault k a
     ) =>
     (a -> b -> b) -> Trie k a -> b -> b
-  trieFold f (MkTrie (Just x)) z = gtrieFold f x z
-  trieFold _ (MkTrie Nothing) z = z
+  trieFold = genericTrieFold
 
   default trieTraverse ::
     ( GTrieKey (Rep k)
@@ -166,15 +175,29 @@ class TrieKey k where
     , Applicative f
     ) =>
     (a -> f b) -> Trie k a -> f (Trie k b)
-  trieTraverse f (MkTrie x) = fmap MkTrie (traverse (gtrieTraverse f) x)
+  trieTraverse = genericTrieTraverse
 
   default trieShowsPrec ::
     ( Show a, GTrieKeyShow (Rep k)
     , TrieRep k a ~ TrieRepDefault k a
     ) =>
     Int -> Trie k a -> ShowS
-  trieShowsPrec p (MkTrie (Just x)) = showsPrec p x
-  trieShowsPrec _ (MkTrie Nothing ) = showString "()"
+  trieShowsPrec = genericTrieShowsPrec
+
+  default select ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    k -> Trie k a -> Trie k a
+  select = genericSelect
+
+  default catMaybes ::
+    ( GTrieKey (Rep k)
+    , TrieRep k (Maybe a) ~ TrieRepDefault k (Maybe a)
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    Trie k (Maybe a) -> Trie k a
+  catMaybes = genericCatMaybes
 
 -- | The default implementation of a 'TrieRep' is 'GTrie' wrapped in
 -- a 'Maybe'. This wrapping is due to the 'GTrie' being a non-empty
@@ -299,6 +322,88 @@ instance (TrieKey a, TrieKey b)            => TrieKey (Either a b)
 instance (TrieKey a, TrieKey b)            => TrieKey (a,b)
 instance (TrieKey a, TrieKey b, TrieKey c) => TrieKey (a,b,c)
 instance TrieKey k                         => TrieKey [k]
+
+------------------------------------------------------------------------------
+-- Generic 'TrieKey' method implementations
+------------------------------------------------------------------------------
+
+-- | Generic implementation of 'lookup'. This is the default implementation.
+genericLookup ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    k -> Trie k a -> Maybe a
+genericLookup k (MkTrie t) = gtrieLookup (from k) =<< t
+
+genericTrieNull ::
+    ( TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    Trie k a -> Bool
+genericTrieNull (MkTrie mb) = isNothing mb
+
+genericSingleton ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    k -> a -> Trie k a
+genericSingleton k v = MkTrie $ Just $! gtrieSingleton (from k) v
+
+genericEmpty ::
+    ( TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    Trie k a
+genericEmpty = MkTrie Nothing
+
+genericInsert ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    k -> a -> Trie k a -> Trie k a
+genericInsert k v (MkTrie Nothing)  = MkTrie (Just $! gtrieSingleton (from k) v)
+genericInsert k v (MkTrie (Just t)) = MkTrie (Just $! gtrieInsert (from k) v t)
+
+genericDelete ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    k -> Trie k a -> Trie k a
+genericDelete _ t@(MkTrie Nothing) = t
+genericDelete k (MkTrie (Just t))  = MkTrie (gtrieDelete (from k) t)
+
+genericTrieMap ::
+    ( GTrieKey (Rep k)
+    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k b ~ TrieRepDefault k b
+    ) =>
+    (a -> b) -> Trie k a -> Trie k b
+genericTrieMap f (MkTrie x) = MkTrie (fmap (gtrieMap f) $! x)
+
+genericTrieFold ::
+    ( GTrieKey (Rep k)
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    (a -> b -> b) -> Trie k a -> b -> b
+genericTrieFold f (MkTrie (Just x)) z = gtrieFold f x z
+genericTrieFold _ (MkTrie Nothing) z = z
+
+genericTrieTraverse ::
+    ( GTrieKey (Rep k)
+    , TrieRep k a ~ TrieRepDefault k a
+    , TrieRep k b ~ TrieRepDefault k b
+    , Applicative f
+    ) =>
+    (a -> f b) -> Trie k a -> f (Trie k b)
+genericTrieTraverse f (MkTrie x) = fmap MkTrie (traverse (gtrieTraverse f) x)
+
+genericTrieShowsPrec ::
+    ( Show a, GTrieKeyShow (Rep k)
+    , TrieRep k a ~ TrieRepDefault k a
+    ) =>
+    Int -> Trie k a -> ShowS
+genericTrieShowsPrec p (MkTrie (Just x)) = showsPrec p x
+genericTrieShowsPrec _ (MkTrie Nothing ) = showString "()"
+
+
 
 ------------------------------------------------------------------------------
 -- Generic implementation class
