@@ -51,14 +51,15 @@ module Data.GenericTrie
   , genericMapMaybe
   , genericSingleton
   , genericEmpty
+  , genericFoldWithKey
+  , genericTraverseWithKey
   , TrieRepDefault
   , GTrieKey(..)
   , GTrie(..)
   ) where
 
 
-import Control.Applicative (Applicative, liftA2, pure)
-import Data.Coerce (coerce)
+import Control.Applicative (Applicative, liftA2)
 import Data.Char (chr, ord)
 import Data.Foldable (Foldable)
 import Data.Functor.Compose (Compose(..))
@@ -121,7 +122,10 @@ class TrieKey k where
   mapMaybe :: (a -> Maybe b) -> Trie k a -> Trie k b
 
   -- | Fold a trie with a function of both key and value.
-  ifoldr :: (k -> a -> r -> r) -> r -> Trie k a -> r
+  foldWithKey :: (k -> a -> r -> r) -> r -> Trie k a -> r
+
+  -- | Traverse a trie with a function of both key and value.
+  traverseWithKey :: Applicative f => (k -> a -> f b) -> Trie k a -> f (Trie k b)
 
 
   -- Defaults using 'Generic'
@@ -186,10 +190,15 @@ class TrieKey k where
     (a -> Maybe b) -> Trie k a -> Trie k b
   mapMaybe = genericMapMaybe
 
-  default ifoldr ::
+  default foldWithKey ::
     ( GTrieKey (Rep k) , TrieRep k ~ TrieRepDefault k, Generic k) =>
     (k -> a -> r -> r) -> r -> Trie k a -> r
-  ifoldr = genericIfoldr
+  foldWithKey = genericFoldWithKey
+
+  default traverseWithKey ::
+    ( GTrieKey (Rep k) , TrieRep k ~ TrieRepDefault k, Generic k, Applicative f) =>
+    (k -> a -> f b) -> Trie k a -> f (Trie k b)
+  traverseWithKey = genericTraverseWithKey
 
 -- | The default implementation of a 'TrieRep' is 'GTrie' wrapped in
 -- a 'Maybe'. This wrapping is due to the 'GTrie' being a non-empty
@@ -225,12 +234,13 @@ instance TrieKey Int where
                                     Nothing -> MkTrie IntMap.empty
                                     Just v  -> MkTrie (IntMap.singleton k v)
   mapMaybe f (MkTrie x)         = MkTrie (IntMap.mapMaybe f x)
-  ifoldr f z (MkTrie x)         = IntMap.foldWithKey f z x
+  foldWithKey f z (MkTrie x)    = IntMap.foldWithKey f z x
+  traverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey f x)
   {-# INLINE empty #-}
   {-# INLINE insert #-}
   {-# INLINE lookup #-}
   {-# INLINE delete #-}
-  {-# INLINE ifoldr #-}
+  {-# INLINE foldWithKey #-}
   {-# INLINE trieTraverse #-}
   {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
@@ -253,7 +263,8 @@ instance TrieKey Integer where
                                     Nothing -> MkTrie Map.empty
                                     Just v  -> MkTrie (Map.singleton k v)
   mapMaybe f (MkTrie x)         = MkTrie (Map.mapMaybe f x)
-  ifoldr f z (MkTrie x)         = Map.foldrWithKey f z x
+  foldWithKey f z (MkTrie x)    = Map.foldrWithKey f z x
+  traverseWithKey f (MkTrie x)  = fmap MkTrie (Map.traverseWithKey f x)
   {-# INLINE empty #-}
   {-# INLINE insert #-}
   {-# INLINE lookup #-}
@@ -261,7 +272,7 @@ instance TrieKey Integer where
   {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
-  {-# INLINE ifoldr #-}
+  {-# INLINE foldWithKey #-}
   {-# INLINE trieTraverse #-}
 
 -- | 'Char tries are implemented with 'IntMap'.
@@ -281,7 +292,8 @@ instance TrieKey Char where
                                     Nothing -> MkTrie IntMap.empty
                                     Just v  -> MkTrie (IntMap.singleton (ord k) v)
   mapMaybe f (MkTrie x)         = MkTrie (IntMap.mapMaybe f x)
-  ifoldr f z (MkTrie x)         = IntMap.foldrWithKey (f . chr) z x
+  foldWithKey f z (MkTrie x)    = IntMap.foldrWithKey (f . chr) z x
+  traverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey (f . chr) x)
   {-# INLINE empty #-}
   {-# INLINE insert #-}
   {-# INLINE lookup #-}
@@ -289,7 +301,7 @@ instance TrieKey Char where
   {-# INLINE trieNull #-}
   {-# INLINE trieTraverse #-}
   {-# INLINE trieMap #-}
-  {-# INLINE ifoldr #-}
+  {-# INLINE foldWithKey #-}
   {-# INLINE trieFold #-}
 
 newtype OrdKey k = OrdKey k
@@ -315,12 +327,13 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
                                             Nothing -> MkTrie Map.empty
                                             Just v  -> MkTrie (Map.singleton k v)
   mapMaybe f (MkTrie x)                 = MkTrie (Map.mapMaybe f x)
-  ifoldr f z (MkTrie x)                 = Map.foldrWithKey (f . OrdKey) z x
+  foldWithKey f z (MkTrie x)            = Map.foldrWithKey (f . OrdKey) z x
+  traverseWithKey f (MkTrie x)          = fmap MkTrie (Map.traverseWithKey (f . OrdKey) x)
   {-# INLINE empty #-}
   {-# INLINE insert #-}
   {-# INLINE lookup #-}
   {-# INLINE delete #-}
-  {-# INLINE ifoldr #-}
+  {-# INLINE foldWithKey #-}
   {-# INLINE trieNull #-}
   {-# INLINE trieMap #-}
   {-# INLINE trieFold #-}
@@ -350,6 +363,7 @@ genericLookup ::
     ) =>
     k -> Trie k a -> Maybe a
 genericLookup k (MkTrie (Compose t)) = gtrieLookup (from k) =<< t
+{-# INLINABLE genericLookup #-}
 
 -- | Generic implementation of 'trieNull'. This is the default implementation.
 genericTrieNull ::
@@ -357,6 +371,7 @@ genericTrieNull ::
     ) =>
     Trie k a -> Bool
 genericTrieNull (MkTrie (Compose mb)) = isNothing mb
+{-# INLINABLE genericTrieNull #-}
 
 -- | Generic implementation of 'singleton'. This is the default implementation.
 genericSingleton ::
@@ -365,6 +380,7 @@ genericSingleton ::
     ) =>
     k -> a -> Trie k a
 genericSingleton k v = MkTrie $ Compose $ Just $! gtrieSingleton (from k) v
+{-# INLINABLE genericSingleton #-}
 
 -- | Generic implementation of 'empty'. This is the default implementation.
 genericEmpty ::
@@ -372,6 +388,7 @@ genericEmpty ::
     ) =>
     Trie k a
 genericEmpty = MkTrie (Compose Nothing)
+{-# INLINABLE genericEmpty #-}
 
 -- | Generic implementation of 'insert'. This is the default implementation.
 genericInsert ::
@@ -383,6 +400,7 @@ genericInsert k v (MkTrie (Compose m)) =
   case m of
     Nothing -> MkTrie (Compose (Just $! gtrieSingleton (from k) v))
     Just t  -> MkTrie (Compose (Just $! gtrieInsert (from k) v t))
+{-# INLINABLE genericInsert #-}
 
 -- | Generic implementation of 'delete'. This is the default implementation.
 genericDelete ::
@@ -391,6 +409,7 @@ genericDelete ::
     ) =>
     k -> Trie k a -> Trie k a
 genericDelete k (MkTrie (Compose m)) = MkTrie (Compose (gtrieDelete (from k) =<< m))
+{-# INLINABLE genericDelete #-}
 
 -- | Generic implementation of 'trieMap'. This is the default implementation.
 genericTrieMap ::
@@ -399,6 +418,7 @@ genericTrieMap ::
     ) =>
     (a -> b) -> Trie k a -> Trie k b
 genericTrieMap f (MkTrie (Compose x)) = MkTrie (Compose (fmap (gtrieMap f) $! x))
+{-# INLINABLE genericTrieMap #-}
 
 -- | Generic implementation of 'trieFold'. This is the default implementation.
 genericTrieFold ::
@@ -410,6 +430,7 @@ genericTrieFold f (MkTrie (Compose m)) z =
   case m of
     Just x  -> gtrieFold f x z
     Nothing -> z
+{-# INLINABLE genericTrieFold #-}
 
 -- | Generic implementation of 'trieTraverse'. This is the default implementation.
 genericTrieTraverse ::
@@ -420,6 +441,7 @@ genericTrieTraverse ::
     (a -> f b) -> Trie k a -> f (Trie k b)
 genericTrieTraverse f (MkTrie (Compose x)) =
   fmap (MkTrie . Compose) (traverse (gtrieTraverse f) x)
+{-# INLINABLE genericTrieTraverse #-}
 
 -- | Generic implementation of 'trieShowsPrec'. This is the default implementation.
 genericTrieShowsPrec ::
@@ -431,6 +453,7 @@ genericTrieShowsPrec p (MkTrie (Compose m)) =
   case m of
     Just x  -> showsPrec p x
     Nothing -> showString "()"
+{-# INLINABLE genericTrieShowsPrec #-}
 
 -- | Generic implementation of 'select'. This is the default implementation.
 genericSelect ::
@@ -439,6 +462,7 @@ genericSelect ::
     ) =>
     k -> Trie k a -> Trie k a
 genericSelect k (MkTrie (Compose x)) = MkTrie (Compose (gselect (from k) =<< x))
+{-# INLINABLE genericSelect #-}
 
 -- | Generic implementation of 'mapMaybe'. This is the default implementation.
 genericMapMaybe ::
@@ -447,17 +471,29 @@ genericMapMaybe ::
     ) =>
     (a -> Maybe b) -> Trie k a -> Trie k b
 genericMapMaybe f (MkTrie (Compose x)) = MkTrie (Compose (gmapMaybe f =<< x))
+{-# INLINABLE genericMapMaybe #-}
 
--- | Generic implementation of 'ifoldr'. This is the default implementation.
-genericIfoldr ::
+-- | Generic implementation of 'foldWithKey'. This is the default implementation.
+genericFoldWithKey ::
     ( GTrieKey (Rep k), Generic k
     , TrieRep k ~ TrieRepDefault k
     ) =>
     (k -> a -> r -> r) -> r -> Trie k a -> r
-genericIfoldr f z (MkTrie (Compose m)) = 
+genericFoldWithKey f z (MkTrie (Compose m)) =
   case m of
     Nothing -> z
-    Just x  -> gifoldr (f . to) z x
+    Just x  -> gfoldWithKey (f . to) z x
+{-# INLINABLE genericFoldWithKey #-}
+
+-- | Generic implementation of 'traverseWithKey'. This is the default implementation.
+genericTraverseWithKey ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k ~ TrieRepDefault k
+    , Applicative f
+    ) =>
+    (k -> a -> f b) -> Trie k a -> f (Trie k b)
+genericTraverseWithKey f (MkTrie (Compose m)) = fmap (MkTrie . Compose) (traverse (gtraverseWithKey (f . to)) m)
+{-# INLINABLE genericTraverseWithKey #-}
 
 
 ------------------------------------------------------------------------------
@@ -472,7 +508,7 @@ data    instance GTrie (f :+: g)  a     = STrieL !(GTrie f a) | STrieR !(GTrie g
 newtype instance GTrie (f :*: g)  a     = PTrie (GTrie f (GTrie g a))
 newtype instance GTrie (K1 i k)   a     = KTrie (Trie k a)
 newtype instance GTrie U1         a     = UTrie a
-data    instance GTrie V1         a     = VTrie
+data    instance GTrie V1         a
 
 instance GTrieKey f => Functor (GTrie f) where
   fmap = gtrieMap
@@ -489,7 +525,8 @@ class GTrieKey f where
   gtrieTraverse  :: Applicative m => (a -> m b) -> GTrie f a -> m (GTrie f b)
   gselect        :: f p -> GTrie f a -> Maybe (GTrie f a)
   gmapMaybe      :: (a -> Maybe b) -> GTrie f a -> Maybe (GTrie f b)
-  gifoldr        :: (f p -> a -> r -> r) -> r -> GTrie f a -> r
+  gfoldWithKey   :: (f p -> a -> r -> r) -> r -> GTrie f a -> r
+  gtraverseWithKey :: Applicative m => (f p -> a -> m b) -> GTrie f a -> m (GTrie f b)
 
 -- | The 'GTrieKeyShow' class provides generic implementations
 -- of 'showsPrec'. This class is separate due to its implementation
@@ -512,7 +549,8 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gtrieTraverse f (MTrie x)     = fmap MTrie (gtrieTraverse f x)
   gselect (M1 k) (MTrie x)      = fmap MTrie (gselect k x)
   gmapMaybe f (MTrie x)         = fmap MTrie (gmapMaybe f x)
-  gifoldr f z (MTrie x)         = gifoldr (f . M1) z x
+  gfoldWithKey f z (MTrie x)         = gfoldWithKey (f . M1) z x
+  gtraverseWithKey f (MTrie x)  = fmap MTrie (gtraverseWithKey (f . M1) x)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieSingleton #-}
@@ -520,7 +558,8 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieTraverse #-}
-  {-# INLINE gifoldr #-}
+  {-# INLINE gfoldWithKey #-}
+  {-# INLINE gtraverseWithKey #-}
 
 data MProxy c (f :: * -> *) a = MProxy
 
@@ -555,7 +594,8 @@ instance TrieKey k => GTrieKey (K1 i k) where
   gtrieTraverse f (KTrie x)             = fmap KTrie (traverse f x)
   gselect (K1 k) (KTrie x)              = fmap KTrie (checkNull (select k x))
   gmapMaybe f (KTrie x)                 = fmap KTrie (checkNull (mapMaybe f x))
-  gifoldr f z (KTrie x)                 = ifoldr (f . K1) z x
+  gfoldWithKey f z (KTrie x)            = foldWithKey (f . K1) z x
+  gtraverseWithKey f (KTrie x)          = fmap KTrie (traverseWithKey (f . K1) x)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieSingleton #-}
@@ -563,7 +603,8 @@ instance TrieKey k => GTrieKey (K1 i k) where
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieTraverse #-}
-  {-# INLINE gifoldr #-}
+  {-# INLINE gfoldWithKey #-}
+  {-# INLINE gtraverseWithKey #-}
 
 instance TrieKey k => GTrieKeyShow (K1 i k) where
   gtrieShowsPrec p (KTrie x)            = showsPrec p x
@@ -590,7 +631,9 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   gtrieTraverse f (PTrie x)             = fmap PTrie (gtrieTraverse (gtrieTraverse f) x)
   gselect (i :*: j) (PTrie x)           = fmap PTrie (gmapMaybe (gselect j) =<< gselect i x)
   gmapMaybe f (PTrie x)                 = fmap PTrie (gmapMaybe (gmapMaybe f) x)
-  gifoldr f z (PTrie x)                 = gifoldr (\i m r -> gifoldr (\j x r -> f (i:*:j) x r) r m) z x
+  gfoldWithKey f z (PTrie x)            = gfoldWithKey (\i m r -> gfoldWithKey (\j -> f (i:*:j)) r m) z x
+  gtraverseWithKey f (PTrie x)          = fmap PTrie (gtraverseWithKey (\i ->
+                                                      gtraverseWithKey (\j -> f (i :*: j))) x)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
@@ -598,7 +641,8 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieTraverse #-}
-  {-# INLINE gifoldr #-}
+  {-# INLINE gfoldWithKey #-}
+  {-# INLINE gtraverseWithKey #-}
 
 instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :*: g) where
   gtrieShowsPrec p (PTrie x)            = showsPrec p x
@@ -663,9 +707,14 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
                                             (Just x', Nothing) -> Just (STrieL x')
                                             (Nothing, Just y') -> Just (STrieR y')
                                             (Just x', Just y') -> Just (STrieB x' y')
-  gifoldr f z (STrieL x)                = gifoldr (f . L1) z x
-  gifoldr f z (STrieR y)                = gifoldr (f . R1) z y
-  gifoldr f z (STrieB x y)              = gifoldr (f . L1) (gifoldr (f . R1) z y) x
+  gfoldWithKey f z (STrieL x)           = gfoldWithKey (f . L1) z x
+  gfoldWithKey f z (STrieR y)           = gfoldWithKey (f . R1) z y
+  gfoldWithKey f z (STrieB x y)         = gfoldWithKey (f . L1) (gfoldWithKey (f . R1) z y) x
+
+  gtraverseWithKey f (STrieL x)         = fmap STrieL (gtraverseWithKey (f . L1) x)
+  gtraverseWithKey f (STrieR y)         = fmap STrieR (gtraverseWithKey (f . R1) y)
+  gtraverseWithKey f (STrieB x y)       = liftA2 STrieB (gtraverseWithKey (f . L1) x)
+                                                        (gtraverseWithKey (f . R1) y)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
@@ -673,7 +722,8 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gtrieMap #-}
-  {-# INLINE gifoldr #-}
+  {-# INLINE gfoldWithKey #-}
+  {-# INLINE gtraverseWithKey #-}
 
 instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :+: g) where
   gtrieShowsPrec p (STrieB x y)         = showParen (p > 10)
@@ -703,7 +753,8 @@ instance GTrieKey U1 where
   gtrieTraverse f (UTrie x)     = fmap UTrie (f x)
   gselect _ x                   = Just x
   gmapMaybe f (UTrie x)         = fmap UTrie (f x)
-  gifoldr f z (UTrie x)         = f U1 x z
+  gfoldWithKey f z (UTrie x)    = f U1 x z
+  gtraverseWithKey f (UTrie x)  = fmap UTrie (f U1 x)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
@@ -711,7 +762,8 @@ instance GTrieKey U1 where
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gtrieMap #-}
-  {-# INLINE gifoldr #-}
+  {-# INLINE gfoldWithKey #-}
+  {-# INLINE gtraverseWithKey #-}
 
 instance GTrieKeyShow U1 where
   gtrieShowsPrec p (UTrie x)    = showsPrec p x
@@ -722,16 +774,17 @@ instance GTrieKeyShow U1 where
 
 -- | Tries of types without constructors are represented by a unit.
 instance GTrieKey V1 where
-  gtrieLookup k _               = k `seq` error "GTrieKey.V1: gtrieLookup"
-  gtrieInsert k _ _             = k `seq` error "GTrieKey.V1: gtrieInsert"
-  gtrieDelete k _               = k `seq` error "GTrieKey.V1: gtrieDelete"
+  gtrieLookup k t               = k `seq` t `seq` error "GTrieKey.V1: gtrieLookup"
+  gtrieInsert k _ t             = k `seq` t `seq` error "GTrieKey.V1: gtrieInsert"
+  gtrieDelete k t               = k `seq` t `seq` error "GTrieKey.V1: gtrieDelete"
   gtrieSingleton k _            = k `seq` error "GTrieKey.V1: gtrieSingleton"
-  gtrieMap _ _                  = VTrie
-  gtrieFold _ _                 = id
-  gtrieTraverse _ _             = pure VTrie
-  gselect v _                   = v `seq` error "GTrieKey.V1: gselect"
-  gmapMaybe _ _                 = Nothing
-  gifoldr _ z _                 = z
+  gtrieMap _ t                  = t `seq` error "GTrieKey.V1: gtrieMap"
+  gtrieFold _ _ t               = t `seq` error "GTrieKey.V1: gtrieFold"
+  gtrieTraverse _ t             = t `seq` error "GTrieKey.V1: gtrieTraverse"
+  gselect k t                   = k `seq` t `seq` error "GTrieKey.V1: gselect"
+  gmapMaybe _ t                 = t `seq` error "GTrieKey.V1: gmapMaybe"
+  gfoldWithKey _ _ t            = t `seq` error "GTrieKey.V1: gmapFoldWithKey"
+  gtraverseWithKey _ t          = t `seq` error "GTrieKey.V1: gtraverseWithKey"
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
@@ -739,7 +792,8 @@ instance GTrieKey V1 where
   {-# INLINE gtrieFold #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieTraverse #-}
-  {-# INLINE gifoldr #-}
+  {-# INLINE gfoldWithKey #-}
+  {-# INLINE gtraverseWithKey #-}
 
 instance GTrieKeyShow V1 where
   gtrieShowsPrec _ _            = showString "()"
@@ -771,7 +825,7 @@ notMember k t = isNothing (lookup k t)
 
 -- | Transform 'Trie' to an association list.
 toList :: TrieKey k => Trie k a -> [(k,a)]
-toList = ifoldr (\k v xs -> (k,v) : xs) []
+toList = foldWithKey (\k v xs -> (k,v) : xs) []
 
 ------------------------------------------------------------------------------
 -- Various instances for Trie
