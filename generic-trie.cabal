@@ -1,12 +1,12 @@
 name:                generic-trie
 version:             0.2
 synopsis:            A map, where the keys may be complex structured data.
-description:         This type implements maps where the keys are themeselves
-                     complexs strucutured data.  For example, the keys may be
+description:         This type implements maps where the keys are themselves
+                     complex structured data.  For example, the keys may be
                      the abstract syntax trees for a programming language.
                      The map is implemented as a trie, so common parts of the
                      keys will be shared in the representation.  The library
-                     provides a generic implementation of the data strucutre,
+                     provides a generic implementation of the data structure,
                      so values of types that have support for 'Generic' may
                      be automatically used as keys in the map.
 license:             BSD3
