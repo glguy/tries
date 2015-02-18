@@ -23,6 +23,7 @@ module Data.GenericTrie.Internal
   , genericMapMaybeWithKey
   , genericSingleton
   , genericEmpty
+  , genericAt
   , genericFoldWithKey
   , genericTraverseWithKey
   , TrieRepDefault
