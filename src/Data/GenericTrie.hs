@@ -17,10 +17,10 @@ where the keys are compared based on order, rather than using the
 trie implementation.
 
 All methods of 'TrieKey' can be derived automatically using
-a 'Generic' instance.
+a 'GHC.Generics.Generic' instance.
 
 @
-data Demo = DemoC1 'Int' | DemoC2 'Int' 'Char'  deriving 'Generic'
+data Demo = DemoC1 'Int' | DemoC2 'Int' 'Char'  deriving 'GHC.Generics.Generic'
 
 instance 'TrieKey' Demo
 @
@@ -46,6 +46,7 @@ module Data.GenericTrie
   , insertWith
   , insertWith'
   , delete
+  , at 
 
   -- ** Queries
   , member
@@ -61,6 +62,8 @@ module Data.GenericTrie
   , traverseWithKey
   , mapMaybe
   , mapMaybeWithKey
+  , filter
+  , filterWithKey
 
   -- ** Combining maps
   , union
@@ -80,7 +83,7 @@ module Data.GenericTrie
 import Control.Applicative (Applicative)
 import Data.List (foldl')
 import Data.Maybe (isNothing, isJust)
-import Prelude hiding (lookup, null)
+import Prelude hiding (lookup, null, filter)
 
 import Data.GenericTrie.Internal
 
@@ -118,6 +121,11 @@ lookup :: TrieKey k => k -> Trie k a -> Maybe a
 lookup = trieLookup
 {-# INLINE lookup #-}
 
+-- | Lens for the value at a given key
+at :: (Functor f, TrieKey k) => k -> (Maybe a -> f (Maybe a)) -> Trie k a -> f (Trie k a)
+at = trieAt
+{-# INLINE at #-}
+
 -- | Insert an element into a trie
 insert :: TrieKey k => k -> a -> Trie k a -> Trie k a
 insert = trieInsert
@@ -138,6 +146,19 @@ singleton = trieSingleton
 mapMaybeWithKey :: TrieKey k => (k -> a -> Maybe b) -> Trie k a -> Trie k b
 mapMaybeWithKey = trieMapMaybeWithKey
 {-# INLINE mapMaybeWithKey #-}
+
+-- | Filter the values of a trie with the given predicate.
+filter :: TrieKey k => (a -> Bool) -> Trie k a -> Trie k a
+filter p = filterWithKey (const p)
+
+-- | Version of 'filter' where the predicate also gets the key.
+filterWithKey :: TrieKey k => (k -> a -> Bool) -> Trie k a -> Trie k a
+filterWithKey p = mapMaybeWithKey aux
+  where
+  aux k x
+    | p k x     = Just x
+    | otherwise = Nothing
+
 
 -- | Fold a trie with a function of the value
 fold :: TrieKey k => (a -> r -> r) -> r -> Trie k a -> r
