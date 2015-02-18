@@ -216,19 +216,19 @@ instance TrieKey Int where
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey f (coerce g) (coerce h) x y)
   trieAt                        = simpleAt
-  {-# INLINE trieEmpty #-}
-  {-# INLINE trieInsert #-}
-  {-# INLINE trieLookup #-}
-  {-# INLINE trieDelete #-}
-  {-# INLINE trieSingleton #-}
-  {-# INLINE trieFoldWithKey #-}
-  {-# INLINE trieShowsPrec #-}
-  {-# INLINE trieTraverse #-}
-  {-# INLINE trieTraverseWithKey #-}
-  {-# INLINE trieNull #-}
-  {-# INLINE trieMap #-}
-  {-# INLINE trieMergeWithKey #-}
-  {-# INLINE trieMapMaybeWithKey #-}
+  {-# INLINABLE trieEmpty #-}
+  {-# INLINABLE trieInsert #-}
+  {-# INLINABLE trieLookup #-}
+  {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieSingleton #-}
+  {-# INLINABLE trieFoldWithKey #-}
+  {-# INLINABLE trieShowsPrec #-}
+  {-# INLINABLE trieTraverse #-}
+  {-# INLINABLE trieTraverseWithKey #-}
+  {-# INLINABLE trieNull #-}
+  {-# INLINABLE trieMap #-}
+  {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMapMaybeWithKey #-}
 
 -- | 'Integer' tries are implemented with 'Map'.
 instance TrieKey Integer where
@@ -247,19 +247,19 @@ instance TrieKey Integer where
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (Map.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey f (coerce g) (coerce h) x y)
   trieAt                            = simpleAt
-  {-# INLINE trieEmpty #-}
-  {-# INLINE trieInsert #-}
-  {-# INLINE trieLookup #-}
-  {-# INLINE trieDelete #-}
-  {-# INLINE trieSingleton #-}
-  {-# INLINE trieFoldWithKey #-}
-  {-# INLINE trieShowsPrec #-}
-  {-# INLINE trieTraverse #-}
-  {-# INLINE trieTraverseWithKey #-}
-  {-# INLINE trieNull #-}
-  {-# INLINE trieMap #-}
-  {-# INLINE trieMergeWithKey #-}
-  {-# INLINE trieMapMaybeWithKey #-}
+  {-# INLINABLE trieEmpty #-}
+  {-# INLINABLE trieInsert #-}
+  {-# INLINABLE trieLookup #-}
+  {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieSingleton #-}
+  {-# INLINABLE trieFoldWithKey #-}
+  {-# INLINABLE trieShowsPrec #-}
+  {-# INLINABLE trieTraverse #-}
+  {-# INLINABLE trieTraverseWithKey #-}
+  {-# INLINABLE trieNull #-}
+  {-# INLINABLE trieMap #-}
+  {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMapMaybeWithKey #-}
 
 -- | 'Char' tries are implemented with 'IntMap'.
 instance TrieKey Char where
@@ -278,19 +278,19 @@ instance TrieKey Char where
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey (f . chr) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey (f . chr) (coerce g) (coerce h) x y)
   trieAt                            = simpleAt
-  {-# INLINE trieEmpty #-}
-  {-# INLINE trieInsert #-}
-  {-# INLINE trieLookup #-}
-  {-# INLINE trieDelete #-}
-  {-# INLINE trieSingleton #-}
-  {-# INLINE trieFoldWithKey #-}
-  {-# INLINE trieShowsPrec #-}
-  {-# INLINE trieTraverse #-}
-  {-# INLINE trieTraverseWithKey #-}
-  {-# INLINE trieNull #-}
-  {-# INLINE trieMap #-}
-  {-# INLINE trieMergeWithKey #-}
-  {-# INLINE trieMapMaybeWithKey #-}
+  {-# INLINABLE trieEmpty #-}
+  {-# INLINABLE trieInsert #-}
+  {-# INLINABLE trieLookup #-}
+  {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieSingleton #-}
+  {-# INLINABLE trieFoldWithKey #-}
+  {-# INLINABLE trieShowsPrec #-}
+  {-# INLINABLE trieTraverse #-}
+  {-# INLINABLE trieTraverseWithKey #-}
+  {-# INLINABLE trieNull #-}
+  {-# INLINABLE trieMap #-}
+  {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMapMaybeWithKey #-}
 
 -- | Tries indexed by 'OrdKey' will be represented as an ordinary 'Map'
 -- and the keys will be compared based on the 'Ord' instance for @k@.
@@ -317,19 +317,19 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
   trieTraverseWithKey f (MkTrie x)      = fmap MkTrie (Map.traverseWithKey (f . OrdKey) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey (f . OrdKey) (coerce g) (coerce h) x y)
   trieAt                                = simpleAt
-  {-# INLINE trieEmpty #-}
-  {-# INLINE trieInsert #-}
-  {-# INLINE trieLookup #-}
-  {-# INLINE trieDelete #-}
-  {-# INLINE trieSingleton #-}
-  {-# INLINE trieFoldWithKey #-}
-  {-# INLINE trieShowsPrec #-}
-  {-# INLINE trieTraverse #-}
-  {-# INLINE trieTraverseWithKey #-}
-  {-# INLINE trieNull #-}
-  {-# INLINE trieMap #-}
-  {-# INLINE trieMergeWithKey #-}
-  {-# INLINE trieMapMaybeWithKey #-}
+  {-# INLINABLE trieEmpty #-}
+  {-# INLINABLE trieInsert #-}
+  {-# INLINABLE trieLookup #-}
+  {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieSingleton #-}
+  {-# INLINABLE trieFoldWithKey #-}
+  {-# INLINABLE trieShowsPrec #-}
+  {-# INLINABLE trieTraverse #-}
+  {-# INLINABLE trieTraverseWithKey #-}
+  {-# INLINABLE trieNull #-}
+  {-# INLINABLE trieMap #-}
+  {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMapMaybeWithKey #-}
 
 ------------------------------------------------------------------------------
 -- Automatically derived instances for common types
@@ -392,9 +392,11 @@ genericAt ::
     k -> (Maybe a -> f (Maybe a)) -> Trie k a -> f (Trie k a)
 genericAt k f (MkTrie (Compose m)) =
   case m of
-    Nothing -> fmap (MkTrie . Compose . fmap (gtrieSingleton (from k))) (f Nothing)
+    Nothing -> fmap (MkTrie . Compose . maybeMap' (gtrieSingleton (from k))) (f Nothing)
     Just t  -> gtrieAt (MkTrie . Compose) (from k) f t
 {-# INLINABLE genericAt #-}
+
+
 
 -- | Generic implementation of 'insert'. This is the default implementation.
 genericInsert ::
@@ -672,9 +674,9 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
     h' i t = do PTrie t' <- h (PTrie (gtrieSingleton i t))
                 gtrieLookup i t'
 
-  gtrieAt z (i :*: j) f (PTrie t) = gtrieAt (z . fmap PTrie) i f1 t
+  gtrieAt z (i :*: j) f (PTrie t) = gtrieAt (coerce z) i f1 t
     where
-    f1 Nothing = fmap (fmap (gtrieSingleton j)) (f Nothing)
+    f1 Nothing = fmap (maybeMap' (gtrieSingleton j)) (f Nothing)
     f1 (Just ti) = gtrieAt id j f ti
 
 
@@ -785,12 +787,12 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
     hr t = do STrieR t' <- h (STrieR t)
               return t'
 
-  gtrieAt z (L1 k) f (STrieL x)   = gtrieAt (z . fmap STrieL) k f x
-  gtrieAt z (R1 k) f (STrieR y)   = gtrieAt (z . fmap STrieR) k f y
-  gtrieAt z (L1 k) f (STrieR y)   = fmap (z . Just . maybe (STrieR y) (\v -> STrieB (gtrieSingleton k v) y)) (f Nothing)
-  gtrieAt z (R1 k) f (STrieL x)   = fmap (z . Just . maybe (STrieL x) (\v -> STrieB x (gtrieSingleton k v))) (f Nothing)
-  gtrieAt z (L1 k) f (STrieB x y) = gtrieAt (z . Just . maybe (STrieR y) (`STrieB` y)) k f x
-  gtrieAt z (R1 k) f (STrieB x y) = gtrieAt (z . Just . maybe (STrieL x) (x `STrieB`)) k f y
+  gtrieAt z (L1 k) f (STrieL x)   = gtrieAt (z . maybeMap' STrieL) k f x
+  gtrieAt z (R1 k) f (STrieR y)   = gtrieAt (z . maybeMap' STrieR) k f y
+  gtrieAt z (L1 k) f (STrieR y)   = fmap (\x -> z (Just $! maybe (STrieR y) (\v -> STrieB (gtrieSingleton k v) y) x)) (f Nothing)
+  gtrieAt z (R1 k) f (STrieL x)   = fmap (\y -> z (Just $! maybe (STrieL x) (\v -> STrieB x (gtrieSingleton k v)) y)) (f Nothing)
+  gtrieAt z (L1 k) f (STrieB x y) = gtrieAt (\x' -> z (Just $! maybe (STrieR y) (`STrieB` y) x')) k f x
+  gtrieAt z (R1 k) f (STrieB x y) = gtrieAt (\y' -> z (Just $! maybe (STrieL x) (x `STrieB`) y')) k f y
 
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
@@ -833,7 +835,7 @@ instance GTrieKey U1 where
   gfoldWithKey f z (UTrie x)    = f U1 x z
   gtraverseWithKey f (UTrie x)  = fmap UTrie (f U1 x)
   gmergeWithKey f _ _ (UTrie x) (UTrie y) = fmap UTrie (f U1 x y)
-  gtrieAt z _ f (UTrie x)       = fmap (z . fmap UTrie) (f (Just x))
+  gtrieAt z _ f (UTrie x)       = fmap (coerce z) (f (Just x))
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
@@ -900,3 +902,9 @@ instance TrieKey k => Foldable (Trie k) where
 
 instance TrieKey k => Traversable (Trie k) where
   traverse = trieTraverse
+
+
+
+maybeMap' :: (a -> b) -> Maybe a -> Maybe b
+maybeMap' _ Nothing = Nothing
+maybeMap' f (Just x) = Just $! f x
