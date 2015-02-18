@@ -1,5 +1,5 @@
 name:                generic-trie
-version:             0.2
+version:             0.3
 synopsis:            A map, where the keys may be complex structured data.
 description:         This type implements maps where the keys are themselves
                      complex structured data.  For example, the keys may be
@@ -20,7 +20,8 @@ homepage:            http://github.com/glguy/tries
 bug-reports:         http://github.com/glguy/tries/issues
 
 library
-  exposed-modules:     Data.GenericTrie
+  exposed-modules:     Data.GenericTrie,
+                       Data.GenericTrie.Internal
   build-depends:       base             >= 4.5     && < 4.9,
                        transformers     >= 0.2     && < 0.5,
                        containers       >= 0.4.2.1 && < 0.6
