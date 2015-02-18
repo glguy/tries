@@ -52,6 +52,7 @@ module Data.GenericTrie
   , member
   , notMember
   , null
+  , lookup
 
   -- ** Folding
   , foldWithKey
