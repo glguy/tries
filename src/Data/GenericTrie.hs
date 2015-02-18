@@ -29,6 +29,8 @@ module Data.GenericTrie
   , Trie
   , alter
   , insert
+  , insertWith
+  , insertWith'
   , delete
   , empty
   , null
@@ -39,6 +41,8 @@ module Data.GenericTrie
   , traverseWithKey
   , notMember
   , fromList
+  , fromListWith
+  , fromListWith'
   , toList
   , mapMaybe
   , mapMaybeWithKey
@@ -69,6 +73,17 @@ import Data.GenericTrie.Internal
 -- | Construct a trie from a list of key/value pairs
 fromList :: TrieKey k => [(k,v)] -> Trie k v
 fromList = foldl' (\acc (k,v) -> insert k v acc) empty
+
+-- | Construct a trie from a list of key/value pairs.
+-- The given function is used to combine values at the
+-- same key.
+fromListWith :: TrieKey k => (v -> v -> v) -> [(k,v)] -> Trie k v
+fromListWith f = foldl' (\acc (k,v) -> insertWith f k v acc) empty
+
+-- | Version of 'fromListWith' which is strict in the result of
+-- the combining function.
+fromListWith' :: TrieKey k => (v -> v -> v) -> [(k,v)] -> Trie k v
+fromListWith' f = foldl' (\acc (k,v) -> insertWith' f k v acc) empty
 
 -- | Construct an empty trie
 empty :: TrieKey k => Trie k a
@@ -138,6 +153,23 @@ alter k f t =
   case f (lookup k t) of
     Just v' -> insert k v' t
     Nothing -> delete k t
+
+-- | Insert a value at the given key. The combining function is used
+-- when a value is already stored at that key. The new value is the
+-- first argument to the combining function.
+insertWith :: TrieKey k => (v -> v -> v) -> k -> v -> Trie k v -> Trie k v
+insertWith f k v = alter k $ \mb ->
+                      case mb of
+                        Just v0 -> Just (f v v0)
+                        Nothing -> Just v
+
+-- | Version of 'insertWith that is strict in the result of combining
+-- two elements.
+insertWith' :: TrieKey k => (v -> v -> v) -> k -> v -> Trie k v -> Trie k v
+insertWith' f k v = alter k $ \mb ->
+                      case mb of
+                        Just v0 -> Just $! f v v0
+                        Nothing -> Just v
 
 -- | Returns 'True' when the 'Trie' has a value stored at the given key.
 member :: TrieKey k => k -> Trie k a -> Bool
