@@ -28,6 +28,7 @@ module Data.GenericTrie
     TrieKey
   , Trie
   , alter
+  , at
   , insert
   , insertWith
   , insertWith'
@@ -101,6 +102,11 @@ null = trieNull
 lookup :: TrieKey k => k -> Trie k a -> Maybe a
 lookup = trieLookup
 {-# INLINE lookup #-}
+
+-- | Lens for the value at a given key
+at :: (Functor f, TrieKey k) => k -> (Maybe a -> f (Maybe a)) -> Trie k a -> f (Trie k a)
+at = trieAt
+{-# INLINE at #-}
 
 -- | Insert element into trie
 insert :: TrieKey k => k -> a -> Trie k a -> Trie k a

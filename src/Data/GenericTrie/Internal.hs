@@ -394,7 +394,7 @@ genericAt ::
 genericAt k f (MkTrie (Compose m)) =
   case m of
     Nothing -> fmap (MkTrie . Compose . fmap (gtrieSingleton (from k))) (f Nothing)
-    Just t  -> fmap (MkTrie . Compose) (gtrieAt (from k) f t)
+    Just t  -> gtrieAt (MkTrie . Compose) (from k) f t
 {-# INLINABLE genericAt #-}
 
 -- | Generic implementation of 'insert'. This is the default implementation.
@@ -535,9 +535,10 @@ class GTrieKey f where
                     (GTrie f b -> Maybe (GTrie f c)) ->
                     GTrie f a -> GTrie f b -> Maybe (GTrie f c)
   gtrieAt        :: Functor m =>
+                      (Maybe (GTrie f a) -> r) ->
                       f p ->
                       (Maybe a -> m (Maybe a)) ->
-                      GTrie f a -> m (Maybe (GTrie f a))
+                      GTrie f a -> m r
 
 -- | The 'GTrieKeyShow' class provides generic implementations
 -- of 'showsPrec'. This class is separate due to its implementation
@@ -561,7 +562,7 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gfoldWithKey f z (MTrie x)    = gfoldWithKey (f . M1) z x
   gtraverseWithKey f (MTrie x)  = fmap MTrie (gtraverseWithKey (f . M1) x)
   gmergeWithKey f g h (MTrie x) (MTrie y) = fmap MTrie (gmergeWithKey (f . M1) (coerce g) (coerce h) x y)
-  gtrieAt (M1 k) f (MTrie x)      = (fmap.fmap) MTrie (gtrieAt k f x)
+  gtrieAt z (M1 k) f (MTrie x)  = gtrieAt (z . fmap MTrie) k f x
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieSingleton #-}
@@ -614,7 +615,7 @@ instance TrieKey k => GTrieKey (K1 i k) where
      h' t = case h (KTrie t) of
               Just (KTrie t') -> t'
               Nothing         -> trieEmpty
-  gtrieAt (K1 k) f (KTrie x) = fmap (fmap KTrie . checkNull) (trieAt k f x)
+  gtrieAt z (K1 k) f (KTrie x) = fmap (z . fmap KTrie . checkNull) (trieAt k f x)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieSingleton #-}
@@ -672,10 +673,10 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
     h' i t = do PTrie t' <- h (PTrie (gtrieSingleton i t))
                 gtrieLookup i t'
 
-  gtrieAt (i :*: j) f (PTrie t) = (fmap.fmap) PTrie (gtrieAt i f1 t)
+  gtrieAt z (i :*: j) f (PTrie t) = gtrieAt (z . fmap PTrie) i f1 t
     where
     f1 Nothing = fmap (fmap (gtrieSingleton j)) (f Nothing)
-    f1 (Just ti) = gtrieAt j f ti
+    f1 (Just ti) = gtrieAt id j f ti
 
 
   {-# INLINE gtrieLookup #-}
@@ -785,12 +786,12 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
     hr t = do STrieR t' <- h (STrieR t)
               return t'
 
-  gtrieAt (L1 k) f (STrieL x)   = (fmap.fmap) STrieL (gtrieAt k f x)
-  gtrieAt (R1 k) f (STrieR y)   = (fmap.fmap) STrieR (gtrieAt k f y)
-  gtrieAt (L1 k) f (STrieR y)   = fmap (Just . maybe (STrieR y) (\v -> STrieB (gtrieSingleton k v) y)) (f Nothing)
-  gtrieAt (R1 k) f (STrieL x)   = fmap (Just . maybe (STrieL x) (\v -> STrieB x (gtrieSingleton k v))) (f Nothing)
-  gtrieAt (L1 k) f (STrieB x y) = fmap (Just . maybe (STrieR y) (`STrieB` y)) (gtrieAt k f x)
-  gtrieAt (R1 k) f (STrieB x y) = fmap (Just . maybe (STrieL x) (x `STrieB`)) (gtrieAt k f y)
+  gtrieAt z (L1 k) f (STrieL x)   = gtrieAt (z . fmap STrieL) k f x
+  gtrieAt z (R1 k) f (STrieR y)   = gtrieAt (z . fmap STrieR) k f y
+  gtrieAt z (L1 k) f (STrieR y)   = fmap (z . Just . maybe (STrieR y) (\v -> STrieB (gtrieSingleton k v) y)) (f Nothing)
+  gtrieAt z (R1 k) f (STrieL x)   = fmap (z . Just . maybe (STrieL x) (\v -> STrieB x (gtrieSingleton k v))) (f Nothing)
+  gtrieAt z (L1 k) f (STrieB x y) = gtrieAt (z . Just . maybe (STrieR y) (`STrieB` y)) k f x
+  gtrieAt z (R1 k) f (STrieB x y) = gtrieAt (z . Just . maybe (STrieL x) (x `STrieB`)) k f y
 
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
@@ -833,7 +834,7 @@ instance GTrieKey U1 where
   gfoldWithKey f z (UTrie x)    = f U1 x z
   gtraverseWithKey f (UTrie x)  = fmap UTrie (f U1 x)
   gmergeWithKey f _ _ (UTrie x) (UTrie y) = fmap UTrie (f U1 x y)
-  gtrieAt _ f (UTrie x)         = (fmap.fmap) UTrie (f (Just x))
+  gtrieAt z _ f (UTrie x)       = fmap (z . fmap UTrie) (f (Just x))
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
@@ -865,7 +866,7 @@ instance GTrieKey V1 where
   gfoldWithKey _ _ t            = t `seq` error "GTrieKey.V1: gmapFoldWithKey"
   gtraverseWithKey _ t          = t `seq` error "GTrieKey.V1: gtraverseWithKey"
   gmergeWithKey _ _ _ t u       = t `seq` u `seq` error "GTrieKey.V1: gmergeWithKey"
-  gtrieAt k _ t                 = k `seq` t `seq` error "GTrieKey.V1: gtrieAt"
+  gtrieAt _ k _ t               = k `seq` t `seq` error "GTrieKey.V1: gtrieAt"
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
