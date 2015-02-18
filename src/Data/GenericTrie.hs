@@ -46,6 +46,8 @@ module Data.GenericTrie
   , toList
   , mapMaybe
   , mapMaybeWithKey
+  , filter
+  , filterWithKey
   , union
   , unionWith
   , unionWithKey
@@ -62,7 +64,7 @@ module Data.GenericTrie
 import Control.Applicative (Applicative)
 import Data.List (foldl')
 import Data.Maybe (isNothing, isJust)
-import Prelude hiding (lookup, null)
+import Prelude hiding (lookup, null, filter)
 
 import Data.GenericTrie.Internal
 
@@ -120,6 +122,19 @@ singleton = trieSingleton
 mapMaybeWithKey :: TrieKey k => (k -> a -> Maybe b) -> Trie k a -> Trie k b
 mapMaybeWithKey = trieMapMaybeWithKey
 {-# INLINE mapMaybeWithKey #-}
+
+-- | Filter the values of a trie with the given predicate.
+filter :: TrieKey k => (a -> Bool) -> Trie k a -> Trie k a
+filter p = filterWithKey (const p)
+
+-- | Version of 'filter' where predicate also gets key.
+filterWithKey :: TrieKey k => (k -> a -> Bool) -> Trie k a -> Trie k a
+filterWithKey p = mapMaybeWithKey aux
+  where
+  aux k x
+    | p k x     = Just x
+    | otherwise = Nothing
+
 
 -- | Fold a trie with a function of both key and value.
 fold :: TrieKey k => (a -> r -> r) -> r -> Trie k a -> r
