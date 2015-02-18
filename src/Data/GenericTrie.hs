@@ -2,14 +2,19 @@
 
 {- |
 
-This module implements an interface for working with "tries".
-A key in the trie represents a distinct path through the trie.
-This can provide benefits when using very large and possibly
-very similar keys where comparing for order can become
-expensive, and storing the various keys could be inefficient.
+This module implements an interface for working with maps.
 
-For primitive types like 'Int', this library will select efficient
-implementations automatically.
+For primitive types, like 'Int', the library automatically selects
+an efficient implementation (e.g., an "IntMap").
+
+For complex structured types, the library uses an implementation
+based on tries: this is useful when using large and similar keys where
+comparing for order may become expensive, and storing the distinct
+keys would be inefficient.
+
+The 'OrdKey' type allows for maps with complex keys,
+where the keys are compared based on order, rather than using the
+trie implementation.
 
 All methods of 'TrieKey' can be derived automatically using
 a 'Generic' instance.
@@ -25,27 +30,39 @@ instance 'TrieKey' Demo
 module Data.GenericTrie
   (
   -- * Trie interface
-    TrieKey
-  , Trie
+    Trie
+  , TrieKey
+
+  -- ** Construction
+  , empty
+  , singleton
+  , fromList
+  , fromListWith
+  , fromListWith'
+
+  -- ** Updates
   , alter
   , insert
   , insertWith
   , insertWith'
   , delete
-  , empty
-  , null
-  , singleton
+
+  -- ** Queries
   , member
+  , notMember
+  , null
+
+  -- ** Folding
   , foldWithKey
   , fold
-  , traverseWithKey
-  , notMember
-  , fromList
-  , fromListWith
-  , fromListWith'
   , toList
+
+  -- ** Traversing
+  , traverseWithKey
   , mapMaybe
   , mapMaybeWithKey
+
+  -- ** Combining maps
   , union
   , unionWith
   , unionWithKey
@@ -55,7 +72,8 @@ module Data.GenericTrie
   , difference
   , differenceWith
   , differenceWithKey
-  -- * Manual ord key instance selector
+
+  -- * Keys using 'Ord'
   , OrdKey(..)
   ) where
 
@@ -70,11 +88,11 @@ import Data.GenericTrie.Internal
 -- Various helpers
 ------------------------------------------------------------------------------
 
--- | Construct a trie from a list of key/value pairs
+-- | Construct a trie from a list of key-value pairs
 fromList :: TrieKey k => [(k,v)] -> Trie k v
 fromList = foldl' (\acc (k,v) -> insert k v acc) empty
 
--- | Construct a trie from a list of key/value pairs.
+-- | Construct a trie from a list of key-value pairs.
 -- The given function is used to combine values at the
 -- same key.
 fromListWith :: TrieKey k => (v -> v -> v) -> [(k,v)] -> Trie k v
@@ -95,17 +113,17 @@ null :: TrieKey k => Trie k a -> Bool
 null = trieNull
 {-# INLINE null #-}
 
--- | Lookup element from trie
+-- | Lookup an element from a trie
 lookup :: TrieKey k => k -> Trie k a -> Maybe a
 lookup = trieLookup
 {-# INLINE lookup #-}
 
--- | Insert element into trie
+-- | Insert an element into a trie
 insert :: TrieKey k => k -> a -> Trie k a -> Trie k a
 insert = trieInsert
 {-# INLINE insert #-}
 
--- | Delete element from trie
+-- | Delete an element from a trie
 delete :: TrieKey k => k -> Trie k a -> Trie k a
 delete = trieDelete
 {-# INLINE delete #-}
@@ -115,23 +133,23 @@ singleton :: TrieKey k => k -> a -> Trie k a
 singleton = trieSingleton
 {-# INLINE singleton #-}
 
--- | Apply a function to the values of a 'Trie' and keep the elements
+-- | Apply a function to the values of a trie and keep the elements
 -- of the trie that result in a 'Just' value.
 mapMaybeWithKey :: TrieKey k => (k -> a -> Maybe b) -> Trie k a -> Trie k b
 mapMaybeWithKey = trieMapMaybeWithKey
 {-# INLINE mapMaybeWithKey #-}
 
--- | Fold a trie with a function of both key and value.
+-- | Fold a trie with a function of the value
 fold :: TrieKey k => (a -> r -> r) -> r -> Trie k a -> r
 fold = trieFoldWithKey . const
 {-# INLINE fold #-}
 
--- | Fold a trie with a function of both key and value.
+-- | Fold a trie with a function of both key and value
 foldWithKey :: TrieKey k => (k -> a -> r -> r) -> r -> Trie k a -> r
 foldWithKey = trieFoldWithKey
 {-# INLINE foldWithKey #-}
 
--- | Traverse a trie with a function of both key and value.
+-- | Traverse a trie with a function of both key and value
 traverseWithKey :: (TrieKey k, Applicative f) => (k -> a -> f b) -> Trie k a -> f (Trie k b)
 traverseWithKey = trieTraverseWithKey
 {-# INLINE traverseWithKey #-}
@@ -145,9 +163,10 @@ mergeWithKey ::
 mergeWithKey = trieMergeWithKey
 {-# INLINE mergeWithKey #-}
 
--- | Alter the values of a trie. The function will take the value stored
--- as the given key if one exists and should return a value to insert at
--- that location or Nothing to delete from that location.
+-- | Alter the value at the given key location.
+-- The parameter function takes the value stored
+-- at the given key, if one exists, and should return a value to insert at
+-- that location, or 'Nothing' to delete from that location.
 alter :: TrieKey k => k -> (Maybe a -> Maybe a) -> Trie k a -> Trie k a
 alter k f t =
   case f (lookup k t) of
@@ -163,7 +182,7 @@ insertWith f k v = alter k $ \mb ->
                         Just v0 -> Just (f v v0)
                         Nothing -> Just v
 
--- | Version of 'insertWith that is strict in the result of combining
+-- | Version of 'insertWith' that is strict in the result of combining
 -- two elements.
 insertWith' :: TrieKey k => (v -> v -> v) -> k -> v -> Trie k v -> Trie k v
 insertWith' f k v = alter k $ \mb ->
@@ -179,7 +198,7 @@ member k t = isJust (lookup k t)
 notMember :: TrieKey k => k -> Trie k a -> Bool
 notMember k t = isNothing (lookup k t)
 
--- | Transform 'Trie' to an association list.
+-- | Transform a trie to an association list.
 toList :: TrieKey k => Trie k a -> [(k,a)]
 toList = foldWithKey (\k v xs -> (k,v) : xs) []
 
@@ -199,24 +218,27 @@ unionWithKey f = mergeWithKey (\k a b -> Just (f k a b)) id id
 intersection :: TrieKey k => Trie k a -> Trie k b -> Trie k a
 intersection = mergeWithKey (\_ a _ -> Just a) (const empty) (const empty)
 
--- | Intersection of two tries parameterized by merge value merge function
+-- | Intersection of two tries parameterized by a combining function of the
+-- values at overlapping keys
 intersectionWith :: TrieKey k => (a -> b -> c) -> Trie k a -> Trie k b -> Trie k c
 intersectionWith f = mergeWithKey (\_ a b -> Just (f a b)) (const empty) (const empty)
 
--- | Intersection of two tries parameterized by merge value merge function with key
+-- | Intersection of two tries parameterized by a combining function of the
+-- key and the values at overlapping keys
 intersectionWithKey :: TrieKey k => (k -> a -> b -> c) -> Trie k a -> Trie k b -> Trie k c
 intersectionWithKey f = mergeWithKey (\k a b -> Just (f k a b)) (const empty) (const empty)
 
--- | Remove keys from right trie from left trie
+-- | Remove the keys of the right trie from the left trie
 difference :: TrieKey k => Trie k a -> Trie k b -> Trie k a
 difference = mergeWithKey (\_ _ _ -> Nothing) id (const empty)
 
--- | Parameterized 'difference' using a custom merge function. Return 'Just' to change
--- value stored in left trie, 'Nothing' to remove from left trie.
+-- | Parameterized 'difference' using a custom merge function.
+-- Return 'Just' to change the value stored in left trie, or
+-- 'Nothing' to remove from the left trie.
 differenceWith :: TrieKey k => (a -> b -> Maybe a) -> Trie k a -> Trie k b -> Trie k a
 differenceWith f = mergeWithKey (\_ -> f) id (const empty)
 
--- | 'differenceWithKey' where function also has access to the key
+-- | 'differenceWith' where function also has access to the key
 differenceWithKey :: TrieKey k => (k -> a -> b -> Maybe a) -> Trie k a -> Trie k b -> Trie k a
 differenceWithKey f = mergeWithKey f id (const empty)
 

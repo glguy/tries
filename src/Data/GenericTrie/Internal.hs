@@ -45,9 +45,10 @@ import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 import Prelude
 
--- | Keys that support prefix-trie map operations.
+-- | Types that may be used as the key of a 'Trie'.
 --
--- All operations can be automatically derived from a 'Generic' instance.
+-- For @data@ delcarations, the instance can be automatically derived from
+-- a 'Generic' instance.
 class TrieKey k where
 
   -- | Type of the representation of tries for this key.
@@ -172,10 +173,7 @@ class TrieKey k where
 -- top level for any given generically implemented key.
 type TrieRepDefault k = Compose Maybe (GTrie (Rep k))
 
--- | Effectively an associated datatype of tries indexable by keys of type @k@.
--- By using a separate newtype wrapper around the associated type synonym we're
--- able to use the same 'MkTrie' constructor for all of the generic
--- implementations while still getting the injectivity of a new type.
+-- | A map from keys of type @k@, to values of type @a@.
 newtype Trie k a = MkTrie (TrieRep k a)
 
 
@@ -273,8 +271,8 @@ instance TrieKey Char where
   {-# INLINE trieMergeWithKey #-}
   {-# INLINE trieMapMaybeWithKey #-}
 
--- | Force the use of a type's 'Ord' instance in order to use 'Map' as the
--- underlying trie representation directly.
+-- | Tries indexed by 'OrdKey' will be represented as an ordinary 'Map'
+-- and the keys will be compared based on the 'Ord' instance for @k@.
 newtype OrdKey k = OrdKey { getOrdKey :: k }
   deriving (Read, Show, Eq, Ord)
 
