@@ -601,7 +601,7 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
                                             Nothing -> Just (PTrie t)
                                             Just ti -> case gtrieDelete j ti of
                                                          Nothing -> fmap PTrie $! gtrieDelete i t
-                                                         Just tj -> Just (PTrie (gtrieInsert i tj t))
+                                                         Just tj -> Just $! PTrie (gtrieInsert i tj t)
   gtrieSingleton (i :*: j) v            = PTrie (gtrieSingleton i (gtrieSingleton j v))
   gtrieMap f (PTrie x)                  = PTrie (gtrieMap (gtrieMap f) x)
   gtrieTraverse f (PTrie x)             = fmap PTrie (gtrieTraverse (gtrieTraverse f) x)
@@ -610,9 +610,8 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   gtraverseWithKey f (PTrie x)          = fmap PTrie (gtraverseWithKey (\i ->
                                                       gtraverseWithKey (\j -> f (i :*: j))) x)
   gmergeWithKey f g h (PTrie x) (PTrie y) =
-    fmap
-      PTrie
-      (gmergeWithKey
+    fmap PTrie $!
+       gmergeWithKey
          (\i ->
            gmergeWithKey
              (\j -> f (i:*:j))
@@ -621,7 +620,7 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
          (coerce g)
          (coerce h)
          x
-         y)
+         y
     where
     g' i t = do PTrie t' <- g (PTrie (gtrieSingleton i t))
                 gtrieLookup i t'
@@ -666,16 +665,16 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   gtrieSingleton (L1 k) v               = STrieL (gtrieSingleton k v)
   gtrieSingleton (R1 k) v               = STrieR (gtrieSingleton k v)
 
-  gtrieDelete (L1 k) (STrieL x)         = fmap STrieL (gtrieDelete k x)
-  gtrieDelete (L1 _) (STrieR y)         = Just (STrieR y)
+  gtrieDelete (L1 k) (STrieL x)         = fmap STrieL $! gtrieDelete k x
+  gtrieDelete (L1 _) (STrieR y)         = Just $! STrieR y
   gtrieDelete (L1 k) (STrieB x y)       = case gtrieDelete k x of
-                                            Nothing -> Just (STrieR y)
-                                            Just x' -> Just (STrieB x' y)
-  gtrieDelete (R1 _) (STrieL x)         = Just (STrieL x)
-  gtrieDelete (R1 k) (STrieR y)         = fmap STrieR (gtrieDelete k y)
+                                            Nothing -> Just $! STrieR y
+                                            Just x' -> Just $! STrieB x' y
+  gtrieDelete (R1 _) (STrieL x)         = Just $! STrieL x
+  gtrieDelete (R1 k) (STrieR y)         = fmap STrieR $! gtrieDelete k y
   gtrieDelete (R1 k) (STrieB x y)       = case gtrieDelete k y of
-                                            Nothing -> Just (STrieL x)
-                                            Just y' -> Just (STrieB x y')
+                                            Nothing -> Just $! STrieL x
+                                            Just y' -> Just $! STrieB x y'
 
   gtrieMap f (STrieB x y)               = STrieB (gtrieMap f x) (gtrieMap f y)
   gtrieMap f (STrieL x)                 = STrieL (gtrieMap f x)
@@ -685,13 +684,13 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   gtrieTraverse f (STrieL x)            = fmap STrieL (gtrieTraverse f x)
   gtrieTraverse f (STrieR y)            = fmap STrieR (gtrieTraverse f y)
 
-  gmapMaybeWithKey f (STrieL x)         = fmap STrieL (gmapMaybeWithKey (f . L1) x)
-  gmapMaybeWithKey f (STrieR y)         = fmap STrieR (gmapMaybeWithKey (f . R1) y)
+  gmapMaybeWithKey f (STrieL x)         = fmap STrieL $! gmapMaybeWithKey (f . L1) x
+  gmapMaybeWithKey f (STrieR y)         = fmap STrieR $! gmapMaybeWithKey (f . R1) y
   gmapMaybeWithKey f (STrieB x y)       = case (gmapMaybeWithKey (f . L1) x, gmapMaybeWithKey (f . R1) y) of
                                             (Nothing, Nothing) -> Nothing
-                                            (Just x', Nothing) -> Just (STrieL x')
-                                            (Nothing, Just y') -> Just (STrieR y')
-                                            (Just x', Just y') -> Just (STrieB x' y')
+                                            (Just x', Nothing) -> Just $! STrieL x'
+                                            (Nothing, Just y') -> Just $! STrieR y'
+                                            (Just x', Just y') -> Just $! STrieB x' y'
 
   gfoldWithKey f z (STrieL x)           = gfoldWithKey (f . L1) z x
   gfoldWithKey f z (STrieR y)           = gfoldWithKey (f . R1) z y
@@ -770,10 +769,10 @@ instance GTrieKey U1 where
   gtrieSingleton _              = UTrie
   gtrieMap f (UTrie x)          = UTrie (f x)
   gtrieTraverse f (UTrie x)     = fmap UTrie (f x)
-  gmapMaybeWithKey f (UTrie x)  = fmap UTrie (f U1 x)
+  gmapMaybeWithKey f (UTrie x)  = fmap UTrie $! f U1 x
   gfoldWithKey f z (UTrie x)    = f U1 x z
   gtraverseWithKey f (UTrie x)  = fmap UTrie (f U1 x)
-  gmergeWithKey f _ _ (UTrie x) (UTrie y) = fmap UTrie (f U1 x y)
+  gmergeWithKey f _ _ (UTrie x) (UTrie y) = fmap UTrie $! f U1 x y
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
