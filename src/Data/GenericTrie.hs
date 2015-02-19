@@ -46,7 +46,7 @@ module Data.GenericTrie
   , insertWith
   , insertWith'
   , delete
-  , at 
+  , at
 
   -- ** Queries
   , member
@@ -124,8 +124,12 @@ lookup = trieLookup
 
 -- | Lens for the value at a given key
 at :: (Functor f, TrieKey k) => k -> (Maybe a -> f (Maybe a)) -> Trie k a -> f (Trie k a)
-at = trieAt
-{-# INLINE at #-}
+at k f m = fmap aux (f mv)
+  where
+  mv = lookup k m
+  aux r = case r of
+    Nothing -> maybe m (const (delete k m)) mv
+    Just v' -> insert k v' m
 
 -- | Insert an element into a trie
 insert :: TrieKey k => k -> a -> Trie k a -> Trie k a
