@@ -6,6 +6,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Trustworthy #-} -- coerce
+{-# LANGUAGE CPP #-} -- MProxy on ghc >= 8
+
+#if MIN_VERSION_base(4,9,0)
+{-# LANGUAGE DataKinds #-} -- Meta
+#endif
 
 -- | Unstable implementation details
 module Data.GenericTrie.Internal
@@ -531,7 +536,11 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   {-# INLINE gfoldWithKey #-}
   {-# INLINE gtraverseWithKey #-}
 
-data MProxy c (f :: * -> *) a = MProxy
+#if MIN_VERSION_base(4,9,0)
+data MProxy (c :: Meta) (f :: * -> *) a = MProxy
+#else
+data MProxy (c :: *)    (f :: * -> *) a = MProxy
+#endif
 
 instance GTrieKeyShow f => GTrieKeyShow (M1 D d f) where
   gtrieShowsPrec p (MTrie x)    = showsPrec p x
