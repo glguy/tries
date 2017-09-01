@@ -506,7 +506,7 @@ class GTrieKey f where
 
 -- | The 'GTrieKeyShow' class provides generic implementations
 -- of 'showsPrec'. This class is separate due to its implementation
--- varying for diferent kinds of metadata.
+-- varying for different kinds of metadata.
 class GTrieKeyShow f where
   gtrieShowsPrec :: Show a => Int -> GTrie f a -> ShowS
 
