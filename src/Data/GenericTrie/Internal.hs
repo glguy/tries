@@ -39,7 +39,6 @@ import Control.Applicative (Applicative, liftA2)
 import Data.Char (chr, ord)
 import Data.Coerce (coerce)
 import Data.Foldable (Foldable)
-import Data.Functor.Compose (Compose(..))
 import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
@@ -52,7 +51,7 @@ import Prelude
 
 -- | Types that may be used as the key of a 'Trie'.
 --
--- For @data@ delcarations, the instance can be automatically derived from
+-- For @data@ declarations, the instance can be automatically derived from
 -- a 'Generic' instance.
 class TrieKey k where
 
@@ -172,12 +171,6 @@ class TrieKey k where
     Trie k a -> Trie k b -> Trie k c
   trieMergeWithKey = genericMergeWithKey
 
--- | The default implementation of a 'TrieRep' is 'GTrie' wrapped in
--- a 'Maybe'. This wrapping is due to the 'GTrie' being a non-empty
--- trie allowing all the of the "emptiness" to be represented at the
--- top level for any given generically implemented key.
-type TrieRepDefault k = Compose Maybe (GTrie (Rep k))
-
 -- | A map from keys of type @k@, to values of type @a@.
 newtype Trie k a = MkTrie (TrieRep k a)
 
@@ -199,7 +192,7 @@ instance TrieKey Int where
   trieTraverse f (MkTrie x)     = fmap MkTrie (traverse f x)
   trieShowsPrec p (MkTrie x)    = showsPrec p x
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (IntMap.mapMaybeWithKey f x)
-  trieFoldWithKey f z (MkTrie x)    = IntMap.foldWithKey f z x
+  trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey f (coerce g) (coerce h) x y)
   {-# INLINABLE trieEmpty #-}
@@ -338,7 +331,7 @@ genericLookup ::
     , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> Trie k a -> Maybe a
-genericLookup k (MkTrie (Compose t)) = gtrieLookup (from k) =<< t
+genericLookup k t = gtrieLookup (from k) =<< unwrap t
 {-# INLINABLE genericLookup #-}
 
 -- | Generic implementation of 'trieNull'. This is the default implementation.
@@ -346,7 +339,7 @@ genericTrieNull ::
     ( TrieRep k ~ TrieRepDefault k
     ) =>
     Trie k a -> Bool
-genericTrieNull (MkTrie (Compose mb)) = isNothing mb
+genericTrieNull = isNothing . unwrap
 {-# INLINABLE genericTrieNull #-}
 
 -- | Generic implementation of 'singleton'. This is the default implementation.
@@ -355,7 +348,7 @@ genericSingleton ::
     , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> a -> Trie k a
-genericSingleton k v = MkTrie $ Compose $ Just $! gtrieSingleton (from k) v
+genericSingleton k v = wrap $ Just $! gtrieSingleton (from k) v
 {-# INLINABLE genericSingleton #-}
 
 -- | Generic implementation of 'empty'. This is the default implementation.
@@ -363,7 +356,7 @@ genericEmpty ::
     ( TrieRep k ~ TrieRepDefault k
     ) =>
     Trie k a
-genericEmpty = MkTrie (Compose Nothing)
+genericEmpty = MkTrie EmptyTrie
 {-# INLINABLE genericEmpty #-}
 
 -- | Generic implementation of 'insert'. This is the default implementation.
@@ -372,8 +365,8 @@ genericInsert ::
     , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> a -> Trie k a -> Trie k a
-genericInsert k v (MkTrie (Compose m)) = MkTrie $ Compose $
-  case m of
+genericInsert k v m = wrap $
+  case unwrap m of
     Nothing -> Just $! gtrieSingleton (from k) v
     Just t  -> Just $! gtrieInsert    (from k) v t
 {-# INLINABLE genericInsert #-}
@@ -384,7 +377,7 @@ genericDelete ::
     , TrieRep k ~ TrieRepDefault k
     ) =>
     k -> Trie k a -> Trie k a
-genericDelete k (MkTrie (Compose m)) = MkTrie (Compose (gtrieDelete (from k) =<< m))
+genericDelete k m = wrap (gtrieDelete (from k) =<< unwrap m)
 {-# INLINABLE genericDelete #-}
 
 -- | Generic implementation of 'trieMap'. This is the default implementation.
@@ -393,7 +386,7 @@ genericTrieMap ::
     , TrieRep k ~ TrieRepDefault k
     ) =>
     (a -> b) -> Trie k a -> Trie k b
-genericTrieMap f (MkTrie (Compose x)) = MkTrie (Compose (fmap (gtrieMap f) $! x))
+genericTrieMap f x = wrap (fmap (gtrieMap f) $! unwrap x)
 {-# INLINABLE genericTrieMap #-}
 
 
@@ -404,8 +397,8 @@ genericTrieTraverse ::
     , Applicative f
     ) =>
     (a -> f b) -> Trie k a -> f (Trie k b)
-genericTrieTraverse f (MkTrie (Compose x)) =
-  fmap (MkTrie . Compose) (traverse (gtrieTraverse f) x)
+genericTrieTraverse f x =
+  fmap wrap (traverse (gtrieTraverse f) (unwrap x))
 {-# INLINABLE genericTrieTraverse #-}
 
 -- | Generic implementation of 'trieShowsPrec'. This is the default implementation.
@@ -414,8 +407,8 @@ genericTrieShowsPrec ::
     , TrieRep k ~ TrieRepDefault k
     ) =>
     Int -> Trie k a -> ShowS
-genericTrieShowsPrec p (MkTrie (Compose m)) =
-  case m of
+genericTrieShowsPrec p m =
+  case unwrap m of
     Just x  -> showsPrec p x
     Nothing -> showString "()"
 {-# INLINABLE genericTrieShowsPrec #-}
@@ -426,7 +419,7 @@ genericMapMaybeWithKey ::
     , TrieRep k ~ TrieRepDefault k
     ) =>
     (k -> a -> Maybe b) -> Trie k a -> Trie k b
-genericMapMaybeWithKey f (MkTrie (Compose x)) = MkTrie (Compose (gmapMaybeWithKey (f . to) =<< x))
+genericMapMaybeWithKey f x = wrap (gmapMaybeWithKey (f . to) =<< unwrap x)
 {-# INLINABLE genericMapMaybeWithKey #-}
 
 -- | Generic implementation of 'foldWithKey'. This is the default implementation.
@@ -435,8 +428,8 @@ genericFoldWithKey ::
     , TrieRep k ~ TrieRepDefault k
     ) =>
     (k -> a -> r -> r) -> r -> Trie k a -> r
-genericFoldWithKey f z (MkTrie (Compose m)) =
-  case m of
+genericFoldWithKey f z m =
+  case unwrap m of
     Nothing -> z
     Just x  -> gfoldWithKey (f . to) z x
 {-# INLINABLE genericFoldWithKey #-}
@@ -448,7 +441,7 @@ genericTraverseWithKey ::
     , Applicative f
     ) =>
     (k -> a -> f b) -> Trie k a -> f (Trie k b)
-genericTraverseWithKey f (MkTrie (Compose m)) = fmap (MkTrie . Compose) (traverse (gtraverseWithKey (f . to)) m)
+genericTraverseWithKey f m = fmap wrap (traverse (gtraverseWithKey (f . to)) (unwrap m))
 {-# INLINABLE genericTraverseWithKey #-}
 
 -- | Generic implementation of 'mergeWithKey'. This is the default implementation.
@@ -458,26 +451,40 @@ genericMergeWithKey ::
     ) =>
     (k -> a -> b -> Maybe c) -> (Trie k a -> Trie k c) -> (Trie k b -> Trie k c) ->
     Trie k a -> Trie k b -> Trie k c
-genericMergeWithKey f g h (MkTrie (Compose x)) (MkTrie (Compose y)) =
+genericMergeWithKey f g h (MkTrie x) (MkTrie y) =
   case (x,y) of
-    (Nothing, Nothing) -> MkTrie (Compose Nothing)
-    (Just{} , Nothing) -> g (MkTrie (Compose x))
-    (Nothing, Just{} ) -> h (MkTrie (Compose y))
-    (Just x', Just y') -> MkTrie (Compose (gmergeWithKey (f . to) (aux g) (aux h) x' y'))
+    (EmptyTrie, EmptyTrie) -> MkTrie EmptyTrie
+    (NonEmptyTrie{} , EmptyTrie) -> g (MkTrie x)
+    (EmptyTrie, NonEmptyTrie{} ) -> h (MkTrie y)
+    (NonEmptyTrie x', NonEmptyTrie y') -> wrap (gmergeWithKey (f . to) (aux g) (aux h) x' y')
       where
-      aux k t = case k (MkTrie (Compose (Just t))) of
-                  MkTrie (Compose r) -> r
+      aux k t = unwrap (k (MkTrie (NonEmptyTrie t)))
 {-# INLINABLE genericMergeWithKey #-}
+
+wrap :: TrieRep k ~ TrieRepDefault k1 => Maybe (GTrie (Rep k1) a) -> Trie k a
+wrap Nothing = MkTrie EmptyTrie
+wrap (Just t) = MkTrie (NonEmptyTrie t)
+
+unwrap :: TrieRep t ~ TrieRepDefault t2 => Trie t t1 -> Maybe (GTrie (Rep t2) t1)
+unwrap (MkTrie EmptyTrie) = Nothing
+unwrap (MkTrie (NonEmptyTrie t)) = Just t
 
 
 ------------------------------------------------------------------------------
 -- Generic implementation class
 ------------------------------------------------------------------------------
 
+-- | The default implementation of a 'TrieRep' is 'GTrie' wrapped in
+-- a 'Maybe'. This wrapping is due to the 'GTrie' being a non-empty
+-- trie allowing all the of the "emptiness" to be represented at the
+-- top level for any given generically implemented key.
+data TrieRepDefault k a = EmptyTrie | NonEmptyTrie !(GTrie (Rep k) a)
+
 -- | Mapping of generic representation of keys to trie structures.
 data    family   GTrie (f :: * -> *) a
 newtype instance GTrie (M1 i c f) a     = MTrie (GTrie f a)
-data    instance GTrie (f :+: g)  a     = STrieL !(GTrie f a) | STrieR !(GTrie g a)
+data    instance GTrie (f :+: g)  a     = STrieL !(GTrie f a)
+                                        | STrieR !(GTrie g a)
                                         | STrieB !(GTrie f a) !(GTrie g a)
 newtype instance GTrie (f :*: g)  a     = PTrie (GTrie f (GTrie g a))
 newtype instance GTrie (K1 i k)   a     = KTrie (Trie k a)
@@ -506,7 +513,7 @@ class GTrieKey f where
 
 -- | The 'GTrieKeyShow' class provides generic implementations
 -- of 'showsPrec'. This class is separate due to its implementation
--- varying for diferent kinds of metadata.
+-- varying for different kinds of metadata.
 class GTrieKeyShow f where
   gtrieShowsPrec :: Show a => Int -> GTrie f a -> ShowS
 
