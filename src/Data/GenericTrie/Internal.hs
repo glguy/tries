@@ -82,9 +82,6 @@ class TrieKey k where
   -- | Traverse the values stored in a trie
   trieTraverse :: Applicative f => (a -> f b) -> Trie k a -> f (Trie k b)
 
-  -- | Show the representation of a trie
-  trieShowsPrec :: Show a => Int -> Trie k a -> ShowS
-
   -- | Apply a function to the values of a 'Trie' and keep the elements
   -- of the trie that result in a 'Just' value.
   trieMapMaybeWithKey :: (k -> a -> Maybe b) -> Trie k a -> Trie k b
@@ -143,11 +140,6 @@ class TrieKey k where
     (a -> f b) -> Trie k a -> f (Trie k b)
   trieTraverse = genericTrieTraverse
 
-  default trieShowsPrec ::
-    ( Show a, GTrieKeyShow (Rep k) , TrieRep k ~ TrieRepDefault k) =>
-    Int -> Trie k a -> ShowS
-  trieShowsPrec = genericTrieShowsPrec
-
   default trieMapMaybeWithKey ::
     ( GTrieKey (Rep k) , Generic k, TrieRep k ~ TrieRepDefault k) =>
     (k -> a -> Maybe b) -> Trie k a -> Trie k b
@@ -174,6 +166,14 @@ class TrieKey k where
 -- | A map from keys of type @k@, to values of type @a@.
 newtype Trie k a = MkTrie (TrieRep k a)
 
+class TrieKey k => ShowTrieKey k where
+  -- | Show the representation of a trie
+  trieShowsPrec :: Show a => Int -> Trie k a -> ShowS
+  default trieShowsPrec ::
+    ( Show a, GTrieKeyShow (Rep k) , TrieRep k ~ TrieRepDefault k) =>
+    Int -> Trie k a -> ShowS
+  trieShowsPrec = genericTrieShowsPrec
+
 
 ------------------------------------------------------------------------------
 -- Manually derived instances for base types
@@ -190,7 +190,6 @@ instance TrieKey Int where
   trieNull (MkTrie x)           = IntMap.null x
   trieMap f (MkTrie x)          = MkTrie (IntMap.map f x)
   trieTraverse f (MkTrie x)     = fmap MkTrie (traverse f x)
-  trieShowsPrec p (MkTrie x)    = showsPrec p x
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (IntMap.mapMaybeWithKey f x)
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey f x)
@@ -201,13 +200,16 @@ instance TrieKey Int where
   {-# INLINABLE trieDelete #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
-  {-# INLINABLE trieShowsPrec #-}
   {-# INLINABLE trieTraverse #-}
   {-# INLINABLE trieTraverseWithKey #-}
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
+
+instance ShowTrieKey Int where
+  trieShowsPrec p (MkTrie x)    = showsPrec p x
+  {-# INLINABLE trieShowsPrec #-}
 
 -- | 'Integer' tries are implemented with 'Map'.
 instance TrieKey Integer where
@@ -220,7 +222,6 @@ instance TrieKey Integer where
   trieNull (MkTrie x)               = Map.null x
   trieMap f (MkTrie x)              = MkTrie (Map.map f x)
   trieTraverse f (MkTrie x)         = fmap MkTrie (traverse f x)
-  trieShowsPrec p (MkTrie x)        = showsPrec p x
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (Map.mapMaybeWithKey f x)
   trieFoldWithKey f z (MkTrie x)    = Map.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (Map.traverseWithKey f x)
@@ -231,13 +232,16 @@ instance TrieKey Integer where
   {-# INLINABLE trieDelete #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
-  {-# INLINABLE trieShowsPrec #-}
   {-# INLINABLE trieTraverse #-}
   {-# INLINABLE trieTraverseWithKey #-}
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
+
+instance ShowTrieKey Integer where
+  trieShowsPrec p (MkTrie x)        = showsPrec p x
+  {-# INLINABLE trieShowsPrec #-}
 
 -- | 'Char' tries are implemented with 'IntMap'.
 instance TrieKey Char where
@@ -250,7 +254,6 @@ instance TrieKey Char where
   trieNull (MkTrie x)               = IntMap.null x
   trieMap f (MkTrie x)              = MkTrie (IntMap.map f x)
   trieTraverse f (MkTrie x)         = fmap MkTrie (traverse f x)
-  trieShowsPrec p (MkTrie x)        = showsPrec p x
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (IntMap.mapMaybeWithKey (f . chr) x)
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey (f . chr) z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey (f . chr) x)
@@ -261,13 +264,16 @@ instance TrieKey Char where
   {-# INLINABLE trieDelete #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
-  {-# INLINABLE trieShowsPrec #-}
   {-# INLINABLE trieTraverse #-}
   {-# INLINABLE trieTraverseWithKey #-}
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
+
+instance ShowTrieKey Char where
+  trieShowsPrec p (MkTrie x)        = showsPrec p x
+  {-# INLINABLE trieShowsPrec #-}
 
 -- | Tries indexed by 'OrdKey' will be represented as an ordinary 'Map'
 -- and the keys will be compared based on the 'Ord' instance for @k@.
@@ -278,7 +284,7 @@ newtype OrdKey k = OrdKey { getOrdKey :: k }
 -- intended for cases where it is better for some reason
 -- to force the use of a 'Map' than to use the generically
 -- derived structure.
-instance (Show k, Ord k) => TrieKey (OrdKey k) where
+instance Ord k => TrieKey (OrdKey k) where
   type TrieRep (OrdKey k)               = Map k
   trieLookup (OrdKey k) (MkTrie x)      = Map.lookup k x
   trieInsert (OrdKey k) v (MkTrie x)    = MkTrie (Map.insert k v x)
@@ -288,7 +294,6 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
   trieNull (MkTrie x)                   = Map.null x
   trieMap f (MkTrie x)                  = MkTrie (Map.map f x)
   trieTraverse f (MkTrie x)             = fmap MkTrie (traverse f x)
-  trieShowsPrec p (MkTrie x)            = showsPrec p x
   trieMapMaybeWithKey f (MkTrie x)      = MkTrie (Map.mapMaybeWithKey (f . OrdKey) x)
   trieFoldWithKey f z (MkTrie x)        = Map.foldrWithKey (f . OrdKey) z x
   trieTraverseWithKey f (MkTrie x)      = fmap MkTrie (Map.traverseWithKey (f . OrdKey) x)
@@ -299,13 +304,16 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
   {-# INLINABLE trieDelete #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
-  {-# INLINABLE trieShowsPrec #-}
   {-# INLINABLE trieTraverse #-}
   {-# INLINABLE trieTraverseWithKey #-}
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
+
+instance (Show k, Ord k) => ShowTrieKey (OrdKey k) where
+  trieShowsPrec p (MkTrie x)            = showsPrec p x
+  {-# INLINABLE trieShowsPrec #-}
 
 ------------------------------------------------------------------------------
 -- Automatically derived instances for common types
@@ -599,7 +607,7 @@ instance TrieKey k => GTrieKey (K1 i k) where
   {-# INLINE gmergeWithKey #-}
   {-# INLINE gmapMaybeWithKey #-}
 
-instance TrieKey k => GTrieKeyShow (K1 i k) where
+instance ShowTrieKey k => GTrieKeyShow (K1 i k) where
   gtrieShowsPrec p (KTrie x)            = showsPrec p x
 
 ------------------------------------------------------------------------------
@@ -838,7 +846,7 @@ instance GTrieKeyShow V1 where
 -- Various instances for Trie
 ------------------------------------------------------------------------------
 
-instance (Show a, TrieKey  k) => Show (Trie  k a) where
+instance (Show a, ShowTrieKey k) => Show (Trie k a) where
   showsPrec = trieShowsPrec
 
 instance (Show a, GTrieKeyShow f) => Show (GTrie f a) where
