@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Trustworthy #-} -- coerce
 {-# LANGUAGE CPP #-} -- MProxy on ghc >= 8
+{-# LANGUAGE EmptyCase #-}
 
 #if MIN_VERSION_base(4,9,0)
 {-# LANGUAGE DataKinds #-} -- Meta
@@ -30,6 +31,7 @@ module Data.GenericTrie.Internal
   , genericEmpty
   , genericFoldWithKey
   , genericTraverseWithKey
+  , genericTraverseMaybeWithKey
   , TrieRepDefault
   , GTrieKey(..)
   , GTrie(..)
@@ -48,6 +50,7 @@ import qualified Data.Foldable as Foldable
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 import Prelude
+import Data.Void (Void)
 
 -- | Types that may be used as the key of a 'Trie'.
 --
@@ -94,6 +97,10 @@ class TrieKey k where
 
   -- | Traverse a trie with a function of both key and value.
   trieTraverseWithKey :: Applicative f => (k -> a -> f b) -> Trie k a -> f (Trie k b)
+
+  -- | Traverse a trie with a function of both key and value, and keep the elements
+  -- of the trie that result in a 'Just' value.
+  trieTraverseMaybeWithKey :: Applicative f => (k -> a -> f (Maybe b)) -> Trie k a -> f (Trie k b)
 
   trieMergeWithKey :: (k -> a -> b -> Maybe c) ->
                       (Trie k a -> Trie k c) ->
@@ -163,6 +170,11 @@ class TrieKey k where
     (k -> a -> f b) -> Trie k a -> f (Trie k b)
   trieTraverseWithKey = genericTraverseWithKey
 
+  default trieTraverseMaybeWithKey ::
+    ( GTrieKey (Rep k) , TrieRep k ~ TrieRepDefault k, Generic k, Applicative f) =>
+    (k -> a -> f (Maybe b)) -> Trie k a -> f (Trie k b)
+  trieTraverseMaybeWithKey = genericTraverseMaybeWithKey
+
   default trieMergeWithKey ::
     ( GTrieKey (Rep k) , TrieRep k ~ TrieRepDefault k, Generic k ) =>
     (k -> a -> b -> Maybe c) ->
@@ -192,6 +204,7 @@ instance TrieKey Int where
   trieTraverse f (MkTrie x)     = fmap MkTrie (traverse f x)
   trieShowsPrec p (MkTrie x)    = showsPrec p x
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (IntMap.mapMaybeWithKey f x)
+  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie . IntMap.mapMaybe id <$> IntMap.traverseWithKey f x
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey f (coerce g) (coerce h) x y)
@@ -208,6 +221,7 @@ instance TrieKey Int where
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
+  {-# INLINABLE trieTraverseMaybeWithKey #-}
 
 -- | 'Integer' tries are implemented with 'Map'.
 instance TrieKey Integer where
@@ -222,6 +236,7 @@ instance TrieKey Integer where
   trieTraverse f (MkTrie x)         = fmap MkTrie (traverse f x)
   trieShowsPrec p (MkTrie x)        = showsPrec p x
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (Map.mapMaybeWithKey f x)
+  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie <$> Map.traverseMaybeWithKey f x
   trieFoldWithKey f z (MkTrie x)    = Map.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (Map.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey f (coerce g) (coerce h) x y)
@@ -234,6 +249,7 @@ instance TrieKey Integer where
   {-# INLINABLE trieShowsPrec #-}
   {-# INLINABLE trieTraverse #-}
   {-# INLINABLE trieTraverseWithKey #-}
+  {-# INLINABLE trieTraverseMaybeWithKey #-}
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
@@ -252,6 +268,7 @@ instance TrieKey Char where
   trieTraverse f (MkTrie x)         = fmap MkTrie (traverse f x)
   trieShowsPrec p (MkTrie x)        = showsPrec p x
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (IntMap.mapMaybeWithKey (f . chr) x)
+  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie . IntMap.mapMaybe id <$> IntMap.traverseWithKey (f . chr) x
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey (f . chr) z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey (f . chr) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey (f . chr) (coerce g) (coerce h) x y)
@@ -264,6 +281,7 @@ instance TrieKey Char where
   {-# INLINABLE trieShowsPrec #-}
   {-# INLINABLE trieTraverse #-}
   {-# INLINABLE trieTraverseWithKey #-}
+  {-# INLINABLE trieTraverseMaybeWithKey #-}
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
@@ -290,6 +308,7 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
   trieTraverse f (MkTrie x)             = fmap MkTrie (traverse f x)
   trieShowsPrec p (MkTrie x)            = showsPrec p x
   trieMapMaybeWithKey f (MkTrie x)      = MkTrie (Map.mapMaybeWithKey (f . OrdKey) x)
+  trieTraverseMaybeWithKey f (MkTrie x) = MkTrie <$> Map.traverseMaybeWithKey (f . OrdKey) x
   trieFoldWithKey f z (MkTrie x)        = Map.foldrWithKey (f . OrdKey) z x
   trieTraverseWithKey f (MkTrie x)      = fmap MkTrie (Map.traverseWithKey (f . OrdKey) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey (f . OrdKey) (coerce g) (coerce h) x y)
@@ -302,6 +321,7 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
   {-# INLINABLE trieShowsPrec #-}
   {-# INLINABLE trieTraverse #-}
   {-# INLINABLE trieTraverseWithKey #-}
+  {-# INLINABLE trieTraverseMaybeWithKey #-}
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
@@ -311,8 +331,10 @@ instance (Show k, Ord k) => TrieKey (OrdKey k) where
 -- Automatically derived instances for common types
 ------------------------------------------------------------------------------
 
+instance                                      TrieKey Void
 instance                                      TrieKey ()
 instance                                      TrieKey Bool
+instance                                      TrieKey Ordering
 instance TrieKey k                         => TrieKey (Maybe k)
 instance (TrieKey a, TrieKey b)            => TrieKey (Either a b)
 instance (TrieKey a, TrieKey b)            => TrieKey (a,b)
@@ -444,6 +466,16 @@ genericTraverseWithKey ::
 genericTraverseWithKey f m = fmap wrap (traverse (gtraverseWithKey (f . to)) (unwrap m))
 {-# INLINABLE genericTraverseWithKey #-}
 
+-- | Generic implementation of 'traverseMaybeWithKey'. This is the default implementation.
+genericTraverseMaybeWithKey ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k ~ TrieRepDefault k
+    , Applicative f
+    ) =>
+    (k -> a -> f (Maybe b)) -> Trie k a -> f (Trie k b)
+genericTraverseMaybeWithKey f m = fmap (maybe (MkTrie EmptyTrie) wrap) (traverse (gtraverseMaybeWithKey (f . to)) (unwrap m))
+{-# INLINABLE genericTraverseMaybeWithKey #-}
+
 -- | Generic implementation of 'mergeWithKey'. This is the default implementation.
 genericMergeWithKey ::
     ( GTrieKey (Rep k), Generic k
@@ -506,6 +538,7 @@ class GTrieKey f where
   gmapMaybeWithKey :: (f p -> a -> Maybe b) -> GTrie f a -> Maybe (GTrie f b)
   gfoldWithKey   :: (f p -> a -> r -> r) -> r -> GTrie f a -> r
   gtraverseWithKey :: Applicative m => (f p -> a -> m b) -> GTrie f a -> m (GTrie f b)
+  gtraverseMaybeWithKey :: Applicative m => (f p -> a -> m (Maybe b)) -> GTrie f a -> m (Maybe (GTrie f b))
   gmergeWithKey  :: (f p -> a -> b -> Maybe c) ->
                     (GTrie f a -> Maybe (GTrie f c)) ->
                     (GTrie f b -> Maybe (GTrie f c)) ->
@@ -532,6 +565,7 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gmapMaybeWithKey f (MTrie x)  = fmap MTrie (gmapMaybeWithKey (f . M1) x)
   gfoldWithKey f z (MTrie x)    = gfoldWithKey (f . M1) z x
   gtraverseWithKey f (MTrie x)  = fmap MTrie (gtraverseWithKey (f . M1) x)
+  gtraverseMaybeWithKey f (MTrie x)  = fmap coerce (gtraverseMaybeWithKey (f . M1) x)
   gmergeWithKey f g h (MTrie x) (MTrie y) = fmap MTrie (gmergeWithKey (f . M1) (coerce g) (coerce h) x y)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
@@ -542,6 +576,7 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gfoldWithKey #-}
   {-# INLINE gtraverseWithKey #-}
+  {-# INLINE gtraverseMaybeWithKey #-}
 
 #if MIN_VERSION_base(4,9,0)
 data MProxy (c :: Meta) (f :: * -> *) a = MProxy
@@ -580,6 +615,7 @@ instance TrieKey k => GTrieKey (K1 i k) where
   gmapMaybeWithKey f (KTrie x)          = fmap KTrie (checkNull (trieMapMaybeWithKey (f . K1) x))
   gfoldWithKey f z (KTrie x)            = trieFoldWithKey (f . K1) z x
   gtraverseWithKey f (KTrie x)          = fmap KTrie (trieTraverseWithKey (f . K1) x)
+  gtraverseMaybeWithKey f (KTrie x)     = fmap (fmap KTrie . checkNull) (trieTraverseMaybeWithKey (f . K1) x)
   gmergeWithKey f g h (KTrie x) (KTrie y) = fmap KTrie (checkNull (trieMergeWithKey (f . K1) g' h' x y))
      where
      g' t = case g (KTrie t) of
@@ -596,6 +632,7 @@ instance TrieKey k => GTrieKey (K1 i k) where
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gfoldWithKey #-}
   {-# INLINE gtraverseWithKey #-}
+  {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
   {-# INLINE gmapMaybeWithKey #-}
 
@@ -625,6 +662,8 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   gfoldWithKey f z (PTrie x)            = gfoldWithKey (\i m r -> gfoldWithKey (\j -> f (i:*:j)) r m) z x
   gtraverseWithKey f (PTrie x)          = fmap PTrie (gtraverseWithKey (\i ->
                                                       gtraverseWithKey (\j -> f (i :*: j))) x)
+  gtraverseMaybeWithKey f (PTrie x)     = fmap (fmap PTrie) (gtraverseMaybeWithKey (\i ->
+                                                      gtraverseMaybeWithKey (\j -> f (i :*: j))) x)
   gmergeWithKey f g h (PTrie x) (PTrie y) =
     fmap PTrie $!
        gmergeWithKey
@@ -651,6 +690,7 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gfoldWithKey #-}
   {-# INLINE gtraverseWithKey #-}
+  {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
   {-# INLINE gmapMaybeWithKey #-}
 
@@ -708,6 +748,16 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
                                             (Nothing, Just y') -> Just $! STrieR y'
                                             (Just x', Just y') -> Just $! STrieB x' y'
 
+  gtraverseMaybeWithKey f (STrieL x)         = fmap STrieL <$> gtraverseMaybeWithKey (f . L1) x
+  gtraverseMaybeWithKey f (STrieR y)         = fmap STrieR <$> gtraverseMaybeWithKey (f . R1) y
+  gtraverseMaybeWithKey f (STrieB x y)       =
+    liftA2 finish (gtraverseMaybeWithKey (f . L1) x) (gtraverseMaybeWithKey (f . R1) y)
+    where
+      finish Nothing   Nothing    = Nothing
+      finish (Just x') Nothing    = Just $! STrieL x'
+      finish Nothing   (Just y')  = Just $! STrieR y'
+      finish (Just x') (Just y')  = Just $! STrieB x' y'
+
   gfoldWithKey f z (STrieL x)           = gfoldWithKey (f . L1) z x
   gfoldWithKey f z (STrieR y)           = gfoldWithKey (f . R1) z y
   gfoldWithKey f z (STrieB x y)         = gfoldWithKey (f . L1) (gfoldWithKey (f . R1) z y) x
@@ -757,6 +807,7 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   {-# INLINE gtrieMap #-}
   {-# INLINE gfoldWithKey #-}
   {-# INLINE gtraverseWithKey #-}
+  {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
   {-# INLINE gmapMaybeWithKey #-}
 
@@ -786,6 +837,7 @@ instance GTrieKey U1 where
   gtrieMap f (UTrie x)          = UTrie (f x)
   gtrieTraverse f (UTrie x)     = fmap UTrie (f x)
   gmapMaybeWithKey f (UTrie x)  = fmap UTrie $! f U1 x
+  gtraverseMaybeWithKey f (UTrie x)  = fmap (fmap UTrie) $! f U1 x
   gfoldWithKey f z (UTrie x)    = f U1 x z
   gtraverseWithKey f (UTrie x)  = fmap UTrie (f U1 x)
   gmergeWithKey f _ _ (UTrie x) (UTrie y) = fmap UTrie $! f U1 x y
@@ -797,6 +849,7 @@ instance GTrieKey U1 where
   {-# INLINE gtrieMap #-}
   {-# INLINE gfoldWithKey #-}
   {-# INLINE gtraverseWithKey #-}
+  {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
   {-# INLINE gmapMaybeWithKey #-}
 
@@ -807,18 +860,32 @@ instance GTrieKeyShow U1 where
 -- Generic implementation for empty types
 ------------------------------------------------------------------------------
 
--- | Tries of types without constructors are represented by a unit.
+-- | Tries of types without constructors are represented by an empty type.
 instance GTrieKey V1 where
-  gtrieLookup k t               = k `seq` t `seq` error "GTrieKey.V1: gtrieLookup"
-  gtrieInsert k _ t             = k `seq` t `seq` error "GTrieKey.V1: gtrieInsert"
-  gtrieDelete k t               = k `seq` t `seq` error "GTrieKey.V1: gtrieDelete"
-  gtrieSingleton k _            = k `seq` error "GTrieKey.V1: gtrieSingleton"
-  gtrieMap _ t                  = t `seq` error "GTrieKey.V1: gtrieMap"
-  gtrieTraverse _ t             = t `seq` error "GTrieKey.V1: gtrieTraverse"
-  gmapMaybeWithKey _ t          = t `seq` error "GTrieKey.V1: gmapMaybeWithKey"
-  gfoldWithKey _ _ t            = t `seq` error "GTrieKey.V1: gmapFoldWithKey"
-  gtraverseWithKey _ t          = t `seq` error "GTrieKey.V1: gtraverseWithKey"
-  gmergeWithKey _ _ _ t u       = t `seq` u `seq` error "GTrieKey.V1: gmergeWithKey"
+-- Why is this represented by an empty type? One might expect it would
+-- be represented by a unit type, as there is exactly one total function
+-- from any empty type to any other type. First, remember that
+-- TrieRepDefault offers an EmptyTrie constructor. So a TrieMap Void x
+-- will be represented by that. Next, note that while the generic Rep
+-- types can be put together in arbitrary ways, derived Generic instances (which
+-- are the only ones that matter) are always structured as sums of products,
+-- and only use V1 at the outermost level. That is, V1 will only appear in a
+-- generic representation if it is the only thing there (aside from M1
+-- wrappers). In particular, the only GTrie types that contain V1 are ones
+-- for empty types, which are adequately represented by EmptyTrie. Indeed,
+-- if we offered an inhabited GTrie for a Void type, we'd run into trouble,
+-- because then we'd falsely claim that the TrieMap from Void isn't null!
+  gtrieLookup _ t               = case t of
+  gtrieInsert _ _ t             = case t of
+  gtrieDelete _ t               = case t of
+  gtrieSingleton k _            = case k of
+  gtrieMap _ t                  = case t of
+  gtrieTraverse _ t             = case t of
+  gmapMaybeWithKey _ t          = case t of
+  gfoldWithKey _ _ t            = case t of
+  gtraverseWithKey _ t          = case t of
+  gtraverseMaybeWithKey _ t     = case t of
+  gmergeWithKey _ _ _ t _       = case t of
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
@@ -827,6 +894,7 @@ instance GTrieKey V1 where
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gfoldWithKey #-}
   {-# INLINE gtraverseWithKey #-}
+  {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
   {-# INLINE gmapMaybeWithKey #-}
 

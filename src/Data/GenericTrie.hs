@@ -61,6 +61,7 @@ module Data.GenericTrie
 
   -- ** Traversing
   , traverseWithKey
+  , traverseMaybeWithKey
   , mapMaybe
   , mapMaybeWithKey
   , filter
@@ -151,6 +152,13 @@ singleton = trieSingleton
 mapMaybeWithKey :: TrieKey k => (k -> a -> Maybe b) -> Trie k a -> Trie k b
 mapMaybeWithKey = trieMapMaybeWithKey
 {-# INLINE mapMaybeWithKey #-}
+
+-- | Perform an action for each value in a trie and keep the elements
+-- of the trie that result in a 'Just' value.
+traverseMaybeWithKey :: (TrieKey k, Applicative f)
+                     => (k -> a -> f (Maybe b)) -> Trie k a -> f (Trie k b)
+traverseMaybeWithKey = trieTraverseMaybeWithKey
+{-# INLINE traverseMaybeWithKey #-}
 
 -- | Filter the values of a trie with the given predicate.
 filter :: TrieKey k => (a -> Bool) -> Trie k a -> Trie k a
