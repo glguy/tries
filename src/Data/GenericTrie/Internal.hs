@@ -45,12 +45,14 @@ import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
 import Data.Traversable (Traversable,traverse)
+import Data.Word
 import GHC.Generics
 import qualified Data.Foldable as Foldable
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 import Prelude
 import Data.Void (Void)
+import Numeric.Natural
 
 -- | Types that may be used as the key of a 'Trie'.
 --
@@ -256,6 +258,40 @@ instance TrieKey Integer where
   {-# INLINABLE trieMapMaybeWithKey #-}
 
 instance ShowTrieKey Integer where
+  trieShowsPrec p (MkTrie x)        = showsPrec p x
+  {-# INLINABLE trieShowsPrec #-}
+
+-- | 'Natural' tries are implemented with 'Map'.
+instance TrieKey Natural where
+  type TrieRep Natural              = Map Natural
+  trieLookup k (MkTrie t)           = Map.lookup k t
+  trieInsert k v (MkTrie t)         = MkTrie (Map.insert k v t)
+  trieDelete k (MkTrie t)           = MkTrie (Map.delete k t)
+  trieEmpty                         = MkTrie Map.empty
+  trieSingleton k v                 = MkTrie (Map.singleton k v)
+  trieNull (MkTrie x)               = Map.null x
+  trieMap f (MkTrie x)              = MkTrie (Map.map f x)
+  trieTraverse f (MkTrie x)         = fmap MkTrie (traverse f x)
+  trieMapMaybeWithKey f (MkTrie x)  = MkTrie (Map.mapMaybeWithKey f x)
+  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie <$> Map.traverseMaybeWithKey f x
+  trieFoldWithKey f z (MkTrie x)    = Map.foldrWithKey f z x
+  trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (Map.traverseWithKey f x)
+  trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey f (coerce g) (coerce h) x y)
+  {-# INLINABLE trieEmpty #-}
+  {-# INLINABLE trieInsert #-}
+  {-# INLINABLE trieLookup #-}
+  {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieSingleton #-}
+  {-# INLINABLE trieFoldWithKey #-}
+  {-# INLINABLE trieTraverse #-}
+  {-# INLINABLE trieTraverseWithKey #-}
+  {-# INLINABLE trieTraverseMaybeWithKey #-}
+  {-# INLINABLE trieNull #-}
+  {-# INLINABLE trieMap #-}
+  {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMapMaybeWithKey #-}
+
+instance ShowTrieKey Natural where
   trieShowsPrec p (MkTrie x)        = showsPrec p x
   {-# INLINABLE trieShowsPrec #-}
 
