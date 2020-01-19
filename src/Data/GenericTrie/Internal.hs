@@ -227,6 +227,40 @@ instance ShowTrieKey Int where
   trieShowsPrec p (MkTrie x)    = showsPrec p x
   {-# INLINABLE trieShowsPrec #-}
 
+-- | 'Word' tries are implemented with 'IntMap'.
+instance TrieKey Word where
+  type TrieRep Word             = IntMap
+  trieLookup k (MkTrie x)       = IntMap.lookup (fromIntegral k) x
+  trieInsert k v (MkTrie t)     = MkTrie (IntMap.insert (fromIntegral k) v t)
+  trieDelete k (MkTrie t)       = MkTrie (IntMap.delete (fromIntegral k) t)
+  trieEmpty                     = MkTrie IntMap.empty
+  trieSingleton k v             = MkTrie (IntMap.singleton (fromIntegral k) v)
+  trieNull (MkTrie x)           = IntMap.null x
+  trieMap f (MkTrie x)          = MkTrie (IntMap.map f x)
+  trieTraverse f (MkTrie x)     = fmap MkTrie (traverse f x)
+  trieMapMaybeWithKey f (MkTrie x)  = MkTrie (IntMap.mapMaybeWithKey (f . fromIntegral) x)
+  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie . IntMap.mapMaybe id <$> IntMap.traverseWithKey (f . fromIntegral) x
+  trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey (f . fromIntegral) z x
+  trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey (f . fromIntegral) x)
+  trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey (f . fromIntegral) (coerce g) (coerce h) x y)
+  {-# INLINABLE trieEmpty #-}
+  {-# INLINABLE trieInsert #-}
+  {-# INLINABLE trieLookup #-}
+  {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieSingleton #-}
+  {-# INLINABLE trieFoldWithKey #-}
+  {-# INLINABLE trieTraverse #-}
+  {-# INLINABLE trieTraverseWithKey #-}
+  {-# INLINABLE trieNull #-}
+  {-# INLINABLE trieMap #-}
+  {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMapMaybeWithKey #-}
+  {-# INLINABLE trieTraverseMaybeWithKey #-}
+
+instance ShowTrieKey Word where
+  trieShowsPrec p (MkTrie x)    = showsPrec p x
+  {-# INLINABLE trieShowsPrec #-}
+
 -- | 'Integer' tries are implemented with 'Map'.
 instance TrieKey Integer where
   type TrieRep Integer              = Map Integer
