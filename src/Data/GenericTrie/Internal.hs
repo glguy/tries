@@ -45,6 +45,7 @@ import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
 import Data.Traversable (Traversable,traverse)
+import Data.Word (Word)
 import GHC.Generics
 import qualified Data.Foldable as Foldable
 import qualified Data.IntMap as IntMap
