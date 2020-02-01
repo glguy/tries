@@ -28,6 +28,7 @@ defaultSelect k = maybe empty (singleton k) . Trie.lookup k
 
 instance SelectableTrieKey Int        where select = defaultSelect
 instance SelectableTrieKey Integer    where select = defaultSelect
+instance SelectableTrieKey Natural    where select = defaultSelect
 instance SelectableTrieKey Char       where select = defaultSelect
 instance (Show a, Ord a) => SelectableTrieKey (OrdKey a) where select = defaultSelect
 
