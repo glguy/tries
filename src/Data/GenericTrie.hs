@@ -32,6 +32,7 @@ module Data.GenericTrie
   -- * Trie interface
     Trie
   , TrieKey
+  , ShowTrieKey
 
   -- ** Construction
   , empty

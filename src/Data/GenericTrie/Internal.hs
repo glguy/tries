@@ -16,6 +16,7 @@
 -- | Unstable implementation details
 module Data.GenericTrie.Internal
   ( TrieKey(..)
+  , ShowTrieKey(..)
   , Trie(..)
   , OrdKey(..)
   -- * Generic derivation implementation
