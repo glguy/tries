@@ -48,6 +48,7 @@ module Data.GenericTrie
   , insertWith'
   , delete
   , at
+  , alterF
 
   -- ** Queries
   , member
@@ -78,6 +79,8 @@ module Data.GenericTrie
   , difference
   , differenceWith
   , differenceWithKey
+  , mergeWithKey
+  , mergeWithKeyA
 
   -- * Keys using 'Ord'
   , OrdKey(..)
@@ -126,12 +129,8 @@ lookup = trieLookup
 
 -- | Lens for the value at a given key
 at :: (Functor f, TrieKey k) => k -> (Maybe a -> f (Maybe a)) -> Trie k a -> f (Trie k a)
-at k f m = fmap aux (f mv)
-  where
-  mv = lookup k m
-  aux r = case r of
-    Nothing -> maybe m (const (delete k m)) mv
-    Just v' -> insert k v' m
+at = flip trieAlterF
+{-# INLINE at #-}
 
 -- | Insert an element into a trie
 insert :: TrieKey k => k -> a -> Trie k a -> Trie k a
@@ -198,6 +197,15 @@ mergeWithKey ::
 mergeWithKey = trieMergeWithKey
 {-# INLINE mergeWithKey #-}
 
+mergeWithKeyA ::
+  (Applicative p, TrieKey k) =>
+  (k -> a -> b -> p (Maybe c)) ->
+  (Trie k a -> p (Trie k c)) ->
+  (Trie k b -> p (Trie k c)) ->
+  Trie k a -> Trie k b -> p (Trie k c)
+mergeWithKeyA = trieMergeWithKeyA
+{-# INLINE mergeWithKeyA #-}
+
 -- | Alter the value at the given key location.
 -- The parameter function takes the value stored
 -- at the given key, if one exists, and should return a value to insert at
@@ -207,6 +215,15 @@ alter k f t =
   case f (lookup k t) of
     Just v' -> insert k v' t
     Nothing -> delete k t
+
+-- | Alter the value at the given key location, 'Functor'ially.
+-- Also, operate most generally at a given key.
+-- The parameter function takes the value stored
+-- at the given key, if one exists, and should return a value to insert at
+-- that location, or 'Nothing' to delete from that location.
+alterF :: (Functor f, TrieKey k) => k -> (Maybe a -> f (Maybe a)) -> Trie k a -> f (Trie k a)
+alterF = flip trieAlterF
+{-# INLINE alterF #-}
 
 -- | Insert a value at the given key. The combining function is used
 -- when a value is already stored at that key. The new value is the

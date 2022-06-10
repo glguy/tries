@@ -8,6 +8,7 @@
 {-# LANGUAGE Trustworthy #-} -- coerce
 {-# LANGUAGE CPP #-} -- MProxy on ghc >= 8
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE NoMonoLocalBinds #-}
 
 #if MIN_VERSION_base(4,9,0)
 {-# LANGUAGE DataKinds #-} -- Meta
@@ -39,9 +40,11 @@ module Data.GenericTrie.Internal
   ) where
 
 import Control.Applicative (Applicative, liftA2)
+import Control.Monad ((<=<))
 import Data.Char (chr, ord)
 import Data.Coerce (coerce)
 import Data.Foldable (Foldable)
+import Data.Functor.Const (Const (..))
 import Data.IntMap (IntMap)
 import Data.Map (Map)
 import Data.Maybe (isNothing)
@@ -50,7 +53,9 @@ import Data.Word (Word)
 import GHC.Generics
 import qualified Data.Foldable as Foldable
 import qualified Data.IntMap as IntMap
+import qualified Data.IntMap.Merge.Lazy as IntMap
 import qualified Data.Map as Map
+import qualified Data.Map.Merge.Lazy as Map
 import Prelude
 import Data.Void (Void)
 import Numeric.Natural
@@ -78,6 +83,9 @@ class TrieKey k where
 
   -- | Delete element from trie
   trieDelete :: k -> Trie k a -> Trie k a
+
+  -- | Alter trie 'Functor'ially — operate most generally at a particular key
+  trieAlterF :: Functor f => (Maybe a -> f (Maybe a)) -> k -> Trie k a -> f (Trie k a)
 
   -- | Construct a trie holding a single value
   trieSingleton :: k -> a -> Trie k a
@@ -107,6 +115,12 @@ class TrieKey k where
                       (Trie k b -> Trie k c) ->
                       Trie k a -> Trie k b -> Trie k c
 
+  trieMergeWithKeyA
+   :: Applicative p
+   => (k -> a -> b -> p (Maybe c))
+   -> (Trie k a -> p (Trie k c))
+   -> (Trie k b -> p (Trie k c))
+   -> Trie k a -> Trie k b -> p (Trie k c)
 
   -- Defaults using 'Generic'
 
@@ -139,6 +153,11 @@ class TrieKey k where
     ( GTrieKey (Rep k), Generic k , TrieRep k ~ TrieRepDefault k) =>
     k -> Trie k a -> Trie k a
   trieDelete = genericDelete
+
+  default trieAlterF ::
+    ( GTrieKey (Rep k), Generic k , TrieRep k ~ TrieRepDefault k, Functor f ) =>
+    (Maybe a -> f (Maybe a)) -> k -> Trie k a -> f (Trie k a)
+  trieAlterF = genericAlterF
 
   default trieMap ::
     ( GTrieKey (Rep k) , TrieRep k ~ TrieRepDefault k) =>
@@ -178,6 +197,14 @@ class TrieKey k where
     Trie k a -> Trie k b -> Trie k c
   trieMergeWithKey = genericMergeWithKey
 
+  default trieMergeWithKeyA ::
+    ( GTrieKey (Rep k) , TrieRep k ~ TrieRepDefault k, Generic k, Applicative p ) =>
+    (k -> a -> b -> p (Maybe c)) ->
+    (Trie k a -> p (Trie k c)) ->
+    (Trie k b -> p (Trie k c)) ->
+    Trie k a -> Trie k b -> p (Trie k c)
+  trieMergeWithKeyA = genericMergeWithKeyA
+
 -- | A map from keys of type @k@, to values of type @a@.
 newtype Trie k a = MkTrie (TrieRep k a)
 
@@ -200,6 +227,7 @@ instance TrieKey Int where
   trieLookup k (MkTrie x)       = IntMap.lookup k x
   trieInsert k v (MkTrie t)     = MkTrie (IntMap.insert k v t)
   trieDelete k (MkTrie t)       = MkTrie (IntMap.delete k t)
+  trieAlterF f k (MkTrie t)     = MkTrie <$> IntMap.alterF f k t
   trieEmpty                     = MkTrie IntMap.empty
   trieSingleton k v             = MkTrie (IntMap.singleton k v)
   trieNull (MkTrie x)           = IntMap.null x
@@ -210,10 +238,12 @@ instance TrieKey Int where
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey f (coerce g) (coerce h) x y)
+  trieMergeWithKeyA = mergeAHelperInt id
   {-# INLINABLE trieEmpty #-}
   {-# INLINABLE trieInsert #-}
   {-# INLINABLE trieLookup #-}
   {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieAlterF #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
   {-# INLINABLE trieTraverse #-}
@@ -221,6 +251,7 @@ instance TrieKey Int where
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMergeWithKeyA #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
   {-# INLINABLE trieTraverseMaybeWithKey #-}
 
@@ -234,6 +265,7 @@ instance TrieKey Integer where
   trieLookup k (MkTrie t)           = Map.lookup k t
   trieInsert k v (MkTrie t)         = MkTrie (Map.insert k v t)
   trieDelete k (MkTrie t)           = MkTrie (Map.delete k t)
+  trieAlterF f k (MkTrie t)         = MkTrie <$> Map.alterF f k t
   trieEmpty                         = MkTrie Map.empty
   trieSingleton k v                 = MkTrie (Map.singleton k v)
   trieNull (MkTrie x)               = Map.null x
@@ -244,10 +276,12 @@ instance TrieKey Integer where
   trieFoldWithKey f z (MkTrie x)    = Map.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (Map.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey f (coerce g) (coerce h) x y)
+  trieMergeWithKeyA = mergeAHelper id
   {-# INLINABLE trieEmpty #-}
   {-# INLINABLE trieInsert #-}
   {-# INLINABLE trieLookup #-}
   {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieAlterF #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
   {-# INLINABLE trieTraverse #-}
@@ -256,6 +290,7 @@ instance TrieKey Integer where
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMergeWithKeyA #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
 
 instance ShowTrieKey Integer where
@@ -268,6 +303,7 @@ instance TrieKey Natural where
   trieLookup k (MkTrie t)           = Map.lookup k t
   trieInsert k v (MkTrie t)         = MkTrie (Map.insert k v t)
   trieDelete k (MkTrie t)           = MkTrie (Map.delete k t)
+  trieAlterF f k (MkTrie t)         = MkTrie <$> Map.alterF f k t
   trieEmpty                         = MkTrie Map.empty
   trieSingleton k v                 = MkTrie (Map.singleton k v)
   trieNull (MkTrie x)               = Map.null x
@@ -278,10 +314,12 @@ instance TrieKey Natural where
   trieFoldWithKey f z (MkTrie x)    = Map.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (Map.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey f (coerce g) (coerce h) x y)
+  trieMergeWithKeyA = mergeAHelper id
   {-# INLINABLE trieEmpty #-}
   {-# INLINABLE trieInsert #-}
   {-# INLINABLE trieLookup #-}
   {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieAlterF #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
   {-# INLINABLE trieTraverse #-}
@@ -290,6 +328,7 @@ instance TrieKey Natural where
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMergeWithKeyA #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
 
 instance ShowTrieKey Natural where
@@ -302,6 +341,7 @@ instance TrieKey Word where
   trieLookup k (MkTrie t)           = IntMap.lookup (fromIntegral k) t
   trieDelete k (MkTrie t)           = MkTrie (IntMap.delete (fromIntegral k) t)
   trieInsert k v (MkTrie t)         = MkTrie (IntMap.insert (fromIntegral k) v t)
+  trieAlterF f k (MkTrie t)         = MkTrie <$> IntMap.alterF f (fromIntegral k) t
   trieEmpty                         = MkTrie IntMap.empty
   trieSingleton k v                 = MkTrie (IntMap.singleton (fromIntegral k) v)
   trieNull (MkTrie x)               = IntMap.null x
@@ -312,10 +352,12 @@ instance TrieKey Word where
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey (f . fromIntegral) z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey (f . fromIntegral) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey (f . fromIntegral) (coerce g) (coerce h) x y)
+  trieMergeWithKeyA = mergeAHelperInt fromIntegral
   {-# INLINABLE trieEmpty #-}
   {-# INLINABLE trieInsert #-}
   {-# INLINABLE trieLookup #-}
   {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieAlterF #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
   {-# INLINABLE trieTraverse #-}
@@ -324,6 +366,7 @@ instance TrieKey Word where
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMergeWithKeyA #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
 
 instance ShowTrieKey Word where
@@ -337,6 +380,7 @@ instance TrieKey Char where
   trieLookup k (MkTrie t)           = IntMap.lookup (ord k) t
   trieDelete k (MkTrie t)           = MkTrie (IntMap.delete (ord k) t)
   trieInsert k v (MkTrie t)         = MkTrie (IntMap.insert (ord k) v t)
+  trieAlterF f k (MkTrie t)         = MkTrie <$> IntMap.alterF f (ord k) t
   trieEmpty                         = MkTrie IntMap.empty
   trieSingleton k v                 = MkTrie (IntMap.singleton (ord k) v)
   trieNull (MkTrie x)               = IntMap.null x
@@ -347,10 +391,12 @@ instance TrieKey Char where
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey (f . chr) z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey (f . chr) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey (f . chr) (coerce g) (coerce h) x y)
+  trieMergeWithKeyA = mergeAHelperInt chr
   {-# INLINABLE trieEmpty #-}
   {-# INLINABLE trieInsert #-}
   {-# INLINABLE trieLookup #-}
   {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieAlterF #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
   {-# INLINABLE trieTraverse #-}
@@ -359,6 +405,7 @@ instance TrieKey Char where
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMergeWithKeyA #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
 
 instance ShowTrieKey Char where
@@ -379,6 +426,7 @@ instance Ord k => TrieKey (OrdKey k) where
   trieLookup (OrdKey k) (MkTrie x)      = Map.lookup k x
   trieInsert (OrdKey k) v (MkTrie x)    = MkTrie (Map.insert k v x)
   trieDelete (OrdKey k) (MkTrie x)      = MkTrie (Map.delete k x)
+  trieAlterF f (OrdKey k) (MkTrie x)    = MkTrie <$> Map.alterF f k x
   trieEmpty                             = MkTrie Map.empty
   trieSingleton (OrdKey k) v            = MkTrie (Map.singleton k v)
   trieNull (MkTrie x)                   = Map.null x
@@ -389,10 +437,12 @@ instance Ord k => TrieKey (OrdKey k) where
   trieFoldWithKey f z (MkTrie x)        = Map.foldrWithKey (f . OrdKey) z x
   trieTraverseWithKey f (MkTrie x)      = fmap MkTrie (Map.traverseWithKey (f . OrdKey) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey (f . OrdKey) (coerce g) (coerce h) x y)
+  trieMergeWithKeyA = mergeAHelper OrdKey
   {-# INLINABLE trieEmpty #-}
   {-# INLINABLE trieInsert #-}
   {-# INLINABLE trieLookup #-}
   {-# INLINABLE trieDelete #-}
+  {-# INLINABLE trieAlterF #-}
   {-# INLINABLE trieSingleton #-}
   {-# INLINABLE trieFoldWithKey #-}
   {-# INLINABLE trieTraverse #-}
@@ -401,7 +451,18 @@ instance Ord k => TrieKey (OrdKey k) where
   {-# INLINABLE trieNull #-}
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
+  {-# INLINABLE trieMergeWithKeyA #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
+
+mergeAHelperInt κ f g h (MkTrie x) (MkTrie y) = MkTrie <$> IntMap.mergeA
+    (IntMap.traverseMaybeMissing $ toWhenMissing g . κ)
+    (IntMap.traverseMaybeMissing $ toWhenMissing h . κ)
+    (IntMap.zipWithMaybeAMatched $ f . κ) x y
+mergeAHelper κ f g h (MkTrie x) (MkTrie y) = MkTrie <$> Map.mergeA
+    (Map.traverseMaybeMissing $ toWhenMissing g . κ)
+    (Map.traverseMaybeMissing $ toWhenMissing h . κ)
+    (Map.zipWithMaybeAMatched $ f . κ) x y
+toWhenMissing f k = fmap (trieLookup k) . f . trieSingleton k
 
 instance (Show k, Ord k) => ShowTrieKey (OrdKey k) where
   trieShowsPrec p (MkTrie x)            = showsPrec p x
@@ -481,6 +542,21 @@ genericDelete ::
     k -> Trie k a -> Trie k a
 genericDelete k m = wrap (gtrieDelete (from k) =<< unwrap m)
 {-# INLINABLE genericDelete #-}
+
+-- | Generic implementation of 'alterF'. This is the default implementation.
+genericAlterF ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k ~ TrieRepDefault k
+    , Functor f ) =>
+    (Maybe a -> f (Maybe a)) -> k -> Trie k a -> f (Trie k a)
+genericAlterF f k = fmap wrap . liftGTrieAlterF f (from k) . unwrap
+{-# INLINABLE genericAlterF #-}
+
+liftGTrieAlterF :: (GTrieKey f, Functor g) => (Maybe a -> g (Maybe a)) -> f p -> Maybe (GTrie f a) -> g (Maybe (GTrie f a))
+liftGTrieAlterF f k = \ case
+    Nothing -> Nothing <$ f Nothing
+    Just a -> gtrieAlterF f k a
+{-# INLINE liftGTrieAlterF #-}
 
 -- | Generic implementation of 'trieMap'. This is the default implementation.
 genericTrieMap ::
@@ -573,6 +649,22 @@ genericMergeWithKey f g h (MkTrie x) (MkTrie y) =
       aux k t = unwrap (k (MkTrie (NonEmptyTrie t)))
 {-# INLINABLE genericMergeWithKey #-}
 
+-- | Generic implementation of 'mergeWithKey'. This is the default implementation.
+genericMergeWithKeyA ::
+    ( GTrieKey (Rep k), Generic k
+    , TrieRep k ~ TrieRepDefault k
+    , Applicative p ) =>
+    (k -> a -> b -> p (Maybe c)) -> (Trie k a -> p (Trie k c)) -> (Trie k b -> p (Trie k c)) ->
+    Trie k a -> Trie k b -> p (Trie k c)
+genericMergeWithKeyA f g h (MkTrie x) (MkTrie y) = case (x,y) of
+    (EmptyTrie, EmptyTrie) -> pure $ MkTrie EmptyTrie
+    (NonEmptyTrie{} , EmptyTrie) -> g (MkTrie x)
+    (EmptyTrie, NonEmptyTrie{} ) -> h (MkTrie y)
+    (NonEmptyTrie x', NonEmptyTrie y') -> wrap <$> gmergeWithKeyA (f . to) (aux g) (aux h) x' y'
+      where
+      aux k t = unwrap <$> k (MkTrie (NonEmptyTrie t))
+{-# INLINABLE genericMergeWithKeyA #-}
+
 wrap :: TrieRep k ~ TrieRepDefault k1 => Maybe (GTrie (Rep k1) a) -> Trie k a
 wrap Nothing = MkTrie EmptyTrie
 wrap (Just t) = MkTrie (NonEmptyTrie t)
@@ -598,13 +690,25 @@ newtype instance GTrie (M1 i c f) a     = MTrie (GTrie f a)
 data    instance GTrie (f :+: g)  a     = STrieL !(GTrie f a)
                                         | STrieR !(GTrie g a)
                                         | STrieB !(GTrie f a) !(GTrie g a)
-newtype instance GTrie (f :*: g)  a     = PTrie (GTrie f (GTrie g a))
-newtype instance GTrie (K1 i k)   a     = KTrie (Trie k a)
+newtype instance GTrie (f :*: g)  a     = PTrie { unPTrie :: GTrie f (GTrie g a) }
+newtype instance GTrie (K1 i k)   a     = KTrie { unKTrie :: Trie k a }
 newtype instance GTrie U1         a     = UTrie a
 data    instance GTrie V1         a
 
 instance GTrieKey f => Functor (GTrie f) where
   fmap = gtrieMap
+
+strieL :: Functor φ => (Maybe (GTrie f a) -> φ (Maybe (GTrie f' a))) -> GTrie (f :+: g) a -> φ (Maybe (GTrie (f' :+: g) a))
+strieL f = \ case
+    STrieL x -> fmap STrieL <$> f (Just x)
+    STrieR y -> Just . ($ y) . maybe STrieR STrieB <$> f Nothing
+    STrieB x y -> Just . ($ y) . maybe STrieR STrieB <$> f (Just x)
+
+strieR :: Functor φ => (Maybe (GTrie g a) -> φ (Maybe (GTrie g' a))) -> GTrie (f :+: g) a -> φ (Maybe (GTrie (f :+: g') a))
+strieR g = \ case
+    STrieL x -> Just . ($ x) . maybe STrieL (flip STrieB) <$> g Nothing
+    STrieR y -> fmap STrieR <$> g (Just y)
+    STrieB x y -> Just . ($ x) . maybe STrieL (flip STrieB) <$> g (Just y)
 
 -- | TrieKey operations on Generic representations used to provide
 -- the default implementations of tries.
@@ -613,6 +717,7 @@ class GTrieKey f where
   gtrieInsert    :: f p -> a -> GTrie f a -> GTrie f a
   gtrieSingleton :: f p -> a -> GTrie f a
   gtrieDelete    :: f p -> GTrie f a -> Maybe (GTrie f a)
+  gtrieAlterF    :: Functor g => (Maybe a -> g (Maybe a)) -> f p -> GTrie f a -> g (Maybe (GTrie f a))
   gtrieMap       :: (a -> b) -> GTrie f a -> GTrie f b
   gtrieTraverse  :: Applicative m => (a -> m b) -> GTrie f a -> m (GTrie f b)
   gmapMaybeWithKey :: (f p -> a -> Maybe b) -> GTrie f a -> Maybe (GTrie f b)
@@ -623,6 +728,12 @@ class GTrieKey f where
                     (GTrie f a -> Maybe (GTrie f c)) ->
                     (GTrie f b -> Maybe (GTrie f c)) ->
                     GTrie f a -> GTrie f b -> Maybe (GTrie f c)
+  gmergeWithKeyA
+   :: Applicative q
+   => (f p -> a -> b -> q (Maybe c))
+   -> (GTrie f a -> q (Maybe (GTrie f c)))
+   -> (GTrie f b -> q (Maybe (GTrie f c)))
+   -> GTrie f a -> GTrie f b -> q (Maybe (GTrie f c))
 
 -- | The 'GTrieKeyShow' class provides generic implementations
 -- of 'showsPrec'. This class is separate due to its implementation
@@ -640,6 +751,7 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gtrieInsert (M1 k) v (MTrie t)= MTrie (gtrieInsert k v t)
   gtrieSingleton (M1 k) v       = MTrie (gtrieSingleton k v)
   gtrieDelete (M1 k) (MTrie x)  = fmap MTrie (gtrieDelete k x)
+  gtrieAlterF f (M1 k) (MTrie x) = fmap MTrie <$> gtrieAlterF f k x
   gtrieMap f (MTrie x)          = MTrie (gtrieMap f x)
   gtrieTraverse f (MTrie x)     = fmap MTrie (gtrieTraverse f x)
   gmapMaybeWithKey f (MTrie x)  = fmap MTrie (gmapMaybeWithKey (f . M1) x)
@@ -647,16 +759,21 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   gtraverseWithKey f (MTrie x)  = fmap MTrie (gtraverseWithKey (f . M1) x)
   gtraverseMaybeWithKey f (MTrie x)  = fmap coerce (gtraverseMaybeWithKey (f . M1) x)
   gmergeWithKey f g h (MTrie x) (MTrie y) = fmap MTrie (gmergeWithKey (f . M1) (coerce g) (coerce h) x y)
+  gmergeWithKeyA f g h (MTrie x) (MTrie y) = (fmap . fmap) MTrie (gmergeWithKeyA (f . M1) (coerceK g) (coerceK h) x y)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieDelete #-}
+  {-# INLINE gtrieAlterF #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gmapMaybeWithKey #-}
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gfoldWithKey #-}
   {-# INLINE gtraverseWithKey #-}
   {-# INLINE gtraverseMaybeWithKey #-}
+  {-# INLINE gmergeWithKeyA #-}
+
+coerceK f = fmap coerce . f . coerce
 
 #if MIN_VERSION_base(4,9,0)
 data MProxy (c :: Meta) (f :: * -> *) a = MProxy
@@ -690,6 +807,7 @@ instance TrieKey k => GTrieKey (K1 i k) where
   gtrieInsert (K1 k) v (KTrie t)        = KTrie (trieInsert k v t)
   gtrieSingleton (K1 k) v               = KTrie (trieSingleton k v)
   gtrieDelete (K1 k) (KTrie t)          = fmap KTrie (checkNull (trieDelete k t))
+  gtrieAlterF f (K1 k) (KTrie x)        = Just . KTrie <$> trieAlterF f k x
   gtrieMap f (KTrie x)                  = KTrie (trieMap f x)
   gtrieTraverse f (KTrie x)             = fmap KTrie (trieTraverse f x)
   gmapMaybeWithKey f (KTrie x)          = fmap KTrie (checkNull (trieMapMaybeWithKey (f . K1) x))
@@ -704,16 +822,22 @@ instance TrieKey k => GTrieKey (K1 i k) where
      h' t = case h (KTrie t) of
               Just (KTrie t') -> t'
               Nothing         -> trieEmpty
+  gmergeWithKeyA f g h (KTrie x) (KTrie y) = fmap KTrie . checkNull <$> trieMergeWithKeyA (f . K1) g' h' x y
+     where
+     g' t = maybe trieEmpty unKTrie <$> g (KTrie t)
+     h' t = maybe trieEmpty unKTrie <$> h (KTrie t)
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieDelete #-}
+  {-# INLINE gtrieAlterF #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gfoldWithKey #-}
   {-# INLINE gtraverseWithKey #-}
   {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
+  {-# INLINE gmergeWithKeyA #-}
   {-# INLINE gmapMaybeWithKey #-}
 
 instance ShowTrieKey k => GTrieKeyShow (K1 i k) where
@@ -735,6 +859,7 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
                                             Just ti -> case gtrieDelete j ti of
                                                          Nothing -> fmap PTrie $! gtrieDelete i t
                                                          Just tj -> Just $! PTrie (gtrieInsert i tj t)
+  gtrieAlterF f (i :*: j) (PTrie t)     = fmap PTrie <$> gtrieAlterF (liftGTrieAlterF f j) i t
   gtrieSingleton (i :*: j) v            = PTrie (gtrieSingleton i (gtrieSingleton j v))
   gtrieMap f (PTrie x)                  = PTrie (gtrieMap (gtrieMap f) x)
   gtrieTraverse f (PTrie x)             = fmap PTrie (gtrieTraverse (gtrieTraverse f) x)
@@ -762,9 +887,18 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
     h' i t = do PTrie t' <- h (PTrie (gtrieSingleton i t))
                 gtrieLookup i t'
 
+  gmergeWithKeyA f g h (PTrie x) (PTrie y) = (fmap . fmap) PTrie $!
+      gmergeWithKeyA
+         (\i -> gmergeWithKeyA (\j -> f (i:*:j)) (g' i) (h' i))
+         (coerceK g) (coerceK h) x y
+    where
+      g' k = fmap (gtrieLookup k <=< fmap unPTrie) . g . PTrie . gtrieSingleton k
+      h' k = fmap (gtrieLookup k <=< fmap unPTrie) . h . PTrie . gtrieSingleton k
+
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
+  {-# INLINE gtrieAlterF #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieTraverse #-}
@@ -772,6 +906,7 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :*: g) where
   {-# INLINE gtraverseWithKey #-}
   {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
+  {-# INLINE gmergeWithKeyA #-}
   {-# INLINE gmapMaybeWithKey #-}
 
 instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :*: g) where
@@ -811,6 +946,14 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   gtrieDelete (R1 k) (STrieB x y)       = case gtrieDelete k y of
                                             Nothing -> Just $! STrieL x
                                             Just y' -> Just $! STrieB x y'
+
+  gtrieAlterF f = \ case
+      L1 k -> strieL (f' k)
+      R1 k -> strieR (f' k)
+    where
+      f' k = \ case
+          Nothing -> Nothing <$ f Nothing
+          Just t -> gtrieAlterF f k t
 
   gtrieMap f (STrieB x y)               = STrieB (gtrieMap f x) (gtrieMap f y)
   gtrieMap f (STrieL x)                 = STrieL (gtrieMap f x)
@@ -879,9 +1022,38 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
     hr t = do STrieR t' <- h (STrieR t)
               return t'
 
+  gmergeWithKeyA f g h x0 y0 =
+    case (split x0, split y0) of
+      ((xl,xr),(yl,yr)) -> build <$> mergel xl yl <*> merger xr yr
+    where
+    split (STrieL x)   = (Just x, Nothing)
+    split (STrieR y)   = (Nothing, Just y)
+    split (STrieB x y) = (Just x, Just y)
+
+    build (Just x) (Just y) = Just (STrieB x y)
+    build (Just x) Nothing  = Just (STrieL x)
+    build Nothing  (Just y) = Just (STrieR y)
+    build Nothing  Nothing  = Nothing
+
+    mergel Nothing  Nothing  = pure Nothing
+    mergel (Just x) Nothing  = gl x
+    mergel Nothing  (Just y) = hl y
+    mergel (Just x) (Just y) = gmergeWithKeyA (f . L1) gl hl x y
+
+    merger Nothing  Nothing  = pure Nothing
+    merger (Just x) Nothing  = gr x
+    merger Nothing  (Just y) = hr y
+    merger (Just x) (Just y) = gmergeWithKeyA (f . R1) gr hr x y
+
+    gl t = (view strieL =<<) <$> g (STrieL t)
+    gr t = (view strieR =<<) <$> g (STrieR t)
+    hl t = (view strieL =<<) <$> h (STrieL t)
+    hr t = (view strieR =<<) <$> h (STrieR t)
+
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
+  {-# INLINE gtrieAlterF #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gtrieMap #-}
@@ -889,7 +1061,10 @@ instance (GTrieKey f, GTrieKey g) => GTrieKey (f :+: g) where
   {-# INLINE gtraverseWithKey #-}
   {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
+  {-# INLINE gmergeWithKeyA #-}
   {-# INLINE gmapMaybeWithKey #-}
+
+view l = getConst . l Const
 
 instance (GTrieKeyShow f, GTrieKeyShow g) => GTrieKeyShow (f :+: g) where
   gtrieShowsPrec p (STrieB x y)         = showParen (p > 10)
@@ -913,6 +1088,7 @@ instance GTrieKey U1 where
   gtrieLookup _ (UTrie x)       = Just x
   gtrieInsert _ v _             = UTrie v
   gtrieDelete _ _               = Nothing
+  gtrieAlterF f _ (UTrie x)     = fmap UTrie <$> f (Just x)
   gtrieSingleton _              = UTrie
   gtrieMap f (UTrie x)          = UTrie (f x)
   gtrieTraverse f (UTrie x)     = fmap UTrie (f x)
@@ -921,9 +1097,11 @@ instance GTrieKey U1 where
   gfoldWithKey f z (UTrie x)    = f U1 x z
   gtraverseWithKey f (UTrie x)  = fmap UTrie (f U1 x)
   gmergeWithKey f _ _ (UTrie x) (UTrie y) = fmap UTrie $! f U1 x y
+  gmergeWithKeyA f _ _ (UTrie x) (UTrie y) = (fmap . fmap) UTrie $! f U1 x y
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
+  {-# INLINE gtrieAlterF #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieTraverse #-}
   {-# INLINE gtrieMap #-}
@@ -931,6 +1109,7 @@ instance GTrieKey U1 where
   {-# INLINE gtraverseWithKey #-}
   {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
+  {-# INLINE gmergeWithKeyA #-}
   {-# INLINE gmapMaybeWithKey #-}
 
 instance GTrieKeyShow U1 where
@@ -958,6 +1137,7 @@ instance GTrieKey V1 where
   gtrieLookup _ t               = case t of
   gtrieInsert _ _ t             = case t of
   gtrieDelete _ t               = case t of
+  gtrieAlterF _ = \ case
   gtrieSingleton k _            = case k of
   gtrieMap _ t                  = case t of
   gtrieTraverse _ t             = case t of
@@ -966,9 +1146,11 @@ instance GTrieKey V1 where
   gtraverseWithKey _ t          = case t of
   gtraverseMaybeWithKey _ t     = case t of
   gmergeWithKey _ _ _ t _       = case t of
+  gmergeWithKeyA _ _ _ t _      = case t of
   {-# INLINE gtrieLookup #-}
   {-# INLINE gtrieInsert #-}
   {-# INLINE gtrieDelete #-}
+  {-# INLINE gtrieAlterF #-}
   {-# INLINE gtrieSingleton #-}
   {-# INLINE gtrieMap #-}
   {-# INLINE gtrieTraverse #-}
@@ -976,6 +1158,7 @@ instance GTrieKey V1 where
   {-# INLINE gtraverseWithKey #-}
   {-# INLINE gtraverseMaybeWithKey #-}
   {-# INLINE gmergeWithKey #-}
+  {-# INLINE gmergeWithKeyA #-}
   {-# INLINE gmapMaybeWithKey #-}
 
 instance GTrieKeyShow V1 where
