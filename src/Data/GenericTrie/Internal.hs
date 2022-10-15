@@ -41,20 +41,17 @@ module Data.GenericTrie.Internal
   , GTrie(..)
   ) where
 
-import Control.Applicative (Applicative, liftA2, (<$>))
 import Data.Char (chr, ord)
 import Data.Coerce (coerce)
-import Data.Foldable (Foldable)
 import Data.IntMap (IntMap)
 #if MIN_VERSION_base(4,9,0)
 import Data.Kind (Type)
 #endif
 import Data.Map (Map)
 import Data.Maybe (isNothing)
-import Data.Traversable (Traversable,traverse)
-import Data.Word (Word)
 import GHC.Generics
 import qualified Data.Foldable as Foldable
+import qualified Data.Traversable as Traversable
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 import Prelude
@@ -1144,8 +1141,12 @@ instance (Show a, GTrieKeyShow f) => Show (GTrie f a) where
 instance TrieKey k => Functor (Trie k) where
   fmap = trieMap
 
-instance TrieKey k => Foldable (Trie k) where
+instance TrieKey k => Foldable.Foldable (Trie k) where
+  foldMap = Traversable.foldMapDefault
   foldr f = trieFoldWithKey (\_ -> f)
+#if MIN_VERSION_base(4,8,0)
+  null = trieNull
+#endif
 
 instance TrieKey k => Traversable (Trie k) where
   traverse = trieTraverse
