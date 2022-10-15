@@ -230,10 +230,6 @@ member k t = isJust (lookup k t)
 notMember :: TrieKey k => k -> Trie k a -> Bool
 notMember k t = isNothing (lookup k t)
 
--- | Transform a trie to an association list.
-toList :: TrieKey k => Trie k a -> [(k,a)]
-toList = foldWithKey (\k v xs -> (k,v) : xs) []
-
 -- | Left-biased union of two tries
 union :: TrieKey k => Trie k a -> Trie k a -> Trie k a
 union = mergeWithKey (\_ a _ -> Just a) id id

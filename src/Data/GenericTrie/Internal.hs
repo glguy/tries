@@ -21,6 +21,7 @@ module Data.GenericTrie.Internal
   , ShowTrieKey(..)
   , Trie(..)
   , OrdKey(..)
+  , toList
   -- * Generic derivation implementation
   , genericTrieNull
   , genericTrieMap
@@ -200,8 +201,12 @@ class TrieKey k where
 -- | A map from keys of type @k@, to values of type @a@.
 newtype Trie k a = MkTrie (TrieRep k a)
 
+-- | Transform a trie to an association list.
+toList :: TrieKey k => Trie k a -> [(k,a)]
+toList = trieFoldWithKey (\k v xs -> (k,v) : xs) []
+
 class TrieKey k => ShowTrieKey k where
-  -- | Show the representation of a trie
+  -- | Show a representation of the internal structure of a trie
   trieShowsPrec :: Show a => Int -> Trie k a -> ShowS
   default trieShowsPrec ::
     ( Show a, GTrieKeyShow (Rep k) , TrieRep k ~ TrieRepDefault k) =>
@@ -815,7 +820,7 @@ instance TrieKey k => GTrieKey (K1 i k) where
   {-# INLINE gmapMaybeWithKey #-}
 
 instance ShowTrieKey k => GTrieKeyShow (K1 i k) where
-  gtrieShowsPrec p (KTrie x)            = showsPrec p x
+  gtrieShowsPrec p (KTrie x)            = trieShowsPrec p x
 
 ------------------------------------------------------------------------------
 -- Generic implementation for products
@@ -1132,8 +1137,9 @@ instance GTrieKeyShow V1 where
 -- Various instances for Trie
 ------------------------------------------------------------------------------
 
-instance (Show a, ShowTrieKey k) => Show (Trie k a) where
-  showsPrec = trieShowsPrec
+instance (TrieKey k, Show k, Show a) => Show (Trie k a) where
+  showsPrec d m  = showParen (d > 10) $
+    showString "fromList " . shows (toList m)
 
 instance (Show a, GTrieKeyShow f) => Show (GTrie f a) where
   showsPrec = gtrieShowsPrec
