@@ -8,7 +8,9 @@
 {-# LANGUAGE Trustworthy #-} -- coerce
 {-# LANGUAGE CPP #-} -- MProxy on ghc >= 8
 {-# LANGUAGE EmptyCase #-}
-
+#if __GLASGOW_HASKELL__ >= 810
+{-# LANGUAGE StandaloneKindSignatures #-}
+#endif
 #if MIN_VERSION_base(4,9,0)
 {-# LANGUAGE DataKinds #-} -- Meta
 #endif
@@ -44,6 +46,9 @@ import Data.Char (chr, ord)
 import Data.Coerce (coerce)
 import Data.Foldable (Foldable)
 import Data.IntMap (IntMap)
+#if MIN_VERSION_base(4,9,0)
+import Data.Kind (Type)
+#endif
 import Data.Map (Map)
 import Data.Maybe (isNothing)
 import Data.Traversable (Traversable,traverse)
@@ -63,7 +68,11 @@ import Numeric.Natural
 class TrieKey k where
 
   -- | Type of the representation of tries for this key.
+#if MIN_VERSION_base(4,9,0)
+  type TrieRep k :: Type -> Type
+#else
   type TrieRep k :: * -> *
+#endif
 
   -- | Construct an empty trie
   trieEmpty :: Trie k a
@@ -623,7 +632,15 @@ unwrap (MkTrie (NonEmptyTrie t)) = Just t
 data TrieRepDefault k a = EmptyTrie | NonEmptyTrie !(GTrie (Rep k) a)
 
 -- | Mapping of generic representation of keys to trie structures.
+#if __GLASGOW_HASKELL__ >= 810
+type GTrie :: (Type -> Type) -> Type -> Type
+data    family   GTrie f a
+#elif MIN_VERSION_base(4,9,0)
+data    family   GTrie (f :: Type -> Type) a
+#else
 data    family   GTrie (f :: * -> *) a
+#endif
+
 newtype instance GTrie (M1 i c f) a     = MTrie (GTrie f a)
 data    instance GTrie (f :+: g)  a     = STrieL !(GTrie f a)
                                         | STrieR !(GTrie g a)
@@ -692,7 +709,7 @@ instance GTrieKey f => GTrieKey (M1 i c f) where
   {-# INLINE gtraverseMaybeWithKey #-}
 
 #if MIN_VERSION_base(4,9,0)
-data MProxy (c :: Meta) (f :: * -> *) a = MProxy
+data MProxy (c :: Meta) (f :: Type -> Type) a = MProxy
 #else
 data MProxy (c :: *)    (f :: * -> *) a = MProxy
 #endif
