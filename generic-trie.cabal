@@ -45,6 +45,16 @@ library
   hs-source-dirs:      src
   default-language:    Haskell2010
 
+-- cabal repl seems to choke on the custom prelude if you just
+-- run it on the library in the usual way. If you instead say
+-- cabal repl bogus, then it works just fine.
+executable bogus
+  main-is:             Main.hs
+  hs-source-dirs:      app
+  default-language:    Haskell2010
+  build-depends:       base
+                     , generic-trie
+
 source-repository head
   type: git
   location: git://github.com/glguy/tries.git
