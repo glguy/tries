@@ -41,7 +41,7 @@ module Data.GenericTrie.Internal
   , GTrie(..)
   ) where
 
-import Control.Applicative (Applicative, liftA2)
+import Control.Applicative (Applicative, liftA2, (<$>))
 import Data.Char (chr, ord)
 import Data.Coerce (coerce)
 import Data.Foldable (Foldable)
@@ -58,8 +58,12 @@ import qualified Data.Foldable as Foldable
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 import Prelude
+#if MIN_VERSION_base(4,8,0)
 import Data.Void (Void)
+#endif
+#if MIN_VERSION_base(4,8,0)
 import Numeric.Natural
+#endif
 
 -- | Types that may be used as the key of a 'Trie'.
 --
@@ -225,7 +229,12 @@ instance TrieKey Int where
   trieMap f (MkTrie x)          = MkTrie (IntMap.map f x)
   trieTraverse f (MkTrie x)     = fmap MkTrie (traverse f x)
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (IntMap.mapMaybeWithKey f x)
-  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie . IntMap.mapMaybe id <$> IntMap.traverseWithKey f x
+  trieTraverseMaybeWithKey f (MkTrie x) =
+#if MIN_VERSION_containers (0,6,4)
+    MkTrie <$> IntMap.traverseMaybeWithKey f x
+#else
+    MkTrie . IntMap.mapMaybe id <$> IntMap.traverseWithKey f x
+#endif
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey f (coerce g) (coerce h) x y)
@@ -261,7 +270,12 @@ instance TrieKey Integer where
   trieMap f (MkTrie x)              = MkTrie (Map.map f x)
   trieTraverse f (MkTrie x)         = fmap MkTrie (traverse f x)
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (Map.mapMaybeWithKey f x)
-  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie <$> Map.traverseMaybeWithKey f x
+  trieTraverseMaybeWithKey f (MkTrie x) =
+#if MIN_VERSION_containers (0,5,8)
+    MkTrie <$> Map.traverseMaybeWithKey f x
+#else
+    MkTrie . Map.mapMaybe id <$> Map.traverseWithKey f x
+#endif
   trieFoldWithKey f z (MkTrie x)    = Map.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (Map.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey f (coerce g) (coerce h) x y)
@@ -284,6 +298,7 @@ instance ShowTrieKey Integer where
   trieShowsPrec p (MkTrie x)        = showsPrec p x
   {-# INLINABLE trieShowsPrec #-}
 
+#if MIN_VERSION_base(4,8,0)
 -- | 'Natural' tries are implemented with 'Map'.
 instance TrieKey Natural where
   type TrieRep Natural              = Map Natural
@@ -297,7 +312,12 @@ instance TrieKey Natural where
   trieMap f (MkTrie x)              = MkTrie (Map.map f x)
   trieTraverse f (MkTrie x)         = fmap MkTrie (traverse f x)
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (Map.mapMaybeWithKey f x)
-  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie <$> Map.traverseMaybeWithKey f x
+  trieTraverseMaybeWithKey f (MkTrie x) =
+#if MIN_VERSION_containers (0,5,8)
+    MkTrie <$> Map.traverseMaybeWithKey f x
+#else
+    MkTrie . Map.mapMaybe id <$> Map.traverseWithKey f x
+#endif
   trieFoldWithKey f z (MkTrie x)    = Map.foldrWithKey f z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (Map.traverseWithKey f x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey f (coerce g) (coerce h) x y)
@@ -319,6 +339,7 @@ instance TrieKey Natural where
 instance ShowTrieKey Natural where
   trieShowsPrec p (MkTrie x)        = showsPrec p x
   {-# INLINABLE trieShowsPrec #-}
+#endif
 
 -- | 'Word' tries are implemented with 'IntMap'.
 instance TrieKey Word where
@@ -333,7 +354,12 @@ instance TrieKey Word where
   trieMap f (MkTrie x)              = MkTrie (IntMap.map f x)
   trieTraverse f (MkTrie x)         = fmap MkTrie (traverse f x)
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (IntMap.mapMaybeWithKey (f . fromIntegral) x)
-  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie . IntMap.mapMaybe id <$> IntMap.traverseWithKey (f . fromIntegral) x
+  trieTraverseMaybeWithKey f (MkTrie x) =
+#if MIN_VERSION_containers (0,6,4)
+    MkTrie <$> IntMap.traverseMaybeWithKey (f . fromIntegral) x
+#else
+    MkTrie . IntMap.mapMaybe id <$> IntMap.traverseWithKey (f . fromIntegral) x
+#endif
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey (f . fromIntegral) z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey (f . fromIntegral) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey (f . fromIntegral) (coerce g) (coerce h) x y)
@@ -370,7 +396,12 @@ instance TrieKey Char where
   trieMap f (MkTrie x)              = MkTrie (IntMap.map f x)
   trieTraverse f (MkTrie x)         = fmap MkTrie (traverse f x)
   trieMapMaybeWithKey f (MkTrie x)  = MkTrie (IntMap.mapMaybeWithKey (f . chr) x)
-  trieTraverseMaybeWithKey f (MkTrie x)  = MkTrie . IntMap.mapMaybe id <$> IntMap.traverseWithKey (f . chr) x
+  trieTraverseMaybeWithKey f (MkTrie x) =
+#if MIN_VERSION_containers (0,6,4)
+    MkTrie <$> IntMap.traverseMaybeWithKey (f . chr) x
+#else
+    MkTrie . IntMap.mapMaybe id <$> IntMap.traverseWithKey (f . chr) x
+#endif
   trieFoldWithKey f z (MkTrie x)    = IntMap.foldrWithKey (f . chr) z x
   trieTraverseWithKey f (MkTrie x)  = fmap MkTrie (IntMap.traverseWithKey (f . chr) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (IntMap.mergeWithKey (f . chr) (coerce g) (coerce h) x y)
@@ -414,7 +445,12 @@ instance Ord k => TrieKey (OrdKey k) where
   trieMap f (MkTrie x)                  = MkTrie (Map.map f x)
   trieTraverse f (MkTrie x)             = fmap MkTrie (traverse f x)
   trieMapMaybeWithKey f (MkTrie x)      = MkTrie (Map.mapMaybeWithKey (f . OrdKey) x)
-  trieTraverseMaybeWithKey f (MkTrie x) = MkTrie <$> Map.traverseMaybeWithKey (f . OrdKey) x
+  trieTraverseMaybeWithKey f (MkTrie x) =
+#if MIN_VERSION_containers (0,5,8)
+    MkTrie <$> Map.traverseMaybeWithKey (f . OrdKey) x
+#else
+    MkTrie . Map.mapMaybe id <$> Map.traverseWithKey (f . OrdKey) x
+#endif
   trieFoldWithKey f z (MkTrie x)        = Map.foldrWithKey (f . OrdKey) z x
   trieTraverseWithKey f (MkTrie x)      = fmap MkTrie (Map.traverseWithKey (f . OrdKey) x)
   trieMergeWithKey f g h (MkTrie x) (MkTrie y) = MkTrie (Map.mergeWithKey (f . OrdKey) (coerce g) (coerce h) x y)
@@ -441,17 +477,30 @@ instance (Show k, Ord k) => ShowTrieKey (OrdKey k) where
 -- Automatically derived instances for common types
 ------------------------------------------------------------------------------
 
+#if MIN_VERSION_base(4,8,0)
 instance                                      TrieKey Void
+instance                                      ShowTrieKey Void
+#endif
 instance                                      TrieKey ()
+instance                                      ShowTrieKey ()
 instance                                      TrieKey Bool
+instance                                      ShowTrieKey Bool
 instance                                      TrieKey Ordering
+instance                                      ShowTrieKey Ordering
 instance TrieKey k                         => TrieKey (Maybe k)
+instance ShowTrieKey k                     => ShowTrieKey (Maybe k)
 instance (TrieKey a, TrieKey b)            => TrieKey (Either a b)
+instance (ShowTrieKey a, ShowTrieKey b)    => ShowTrieKey (Either a b)
 instance (TrieKey a, TrieKey b)            => TrieKey (a,b)
+instance (ShowTrieKey a, ShowTrieKey b)    => ShowTrieKey (a,b)
 instance (TrieKey a, TrieKey b, TrieKey c) => TrieKey (a,b,c)
+instance (ShowTrieKey a, ShowTrieKey b, ShowTrieKey c) => ShowTrieKey (a,b,c)
 instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d) => TrieKey (a,b,c,d)
+instance (ShowTrieKey a, ShowTrieKey b, ShowTrieKey c, ShowTrieKey d) => ShowTrieKey (a,b,c,d)
 instance (TrieKey a, TrieKey b, TrieKey c, TrieKey d, TrieKey e) => TrieKey (a,b,c,d,e)
+instance (ShowTrieKey a, ShowTrieKey b, ShowTrieKey c, ShowTrieKey d, ShowTrieKey e) => ShowTrieKey (a,b,c,d,e)
 instance TrieKey k                         => TrieKey [k]
+instance ShowTrieKey k                     => ShowTrieKey [k]
 
 ------------------------------------------------------------------------------
 -- Generic 'TrieKey' method implementations
