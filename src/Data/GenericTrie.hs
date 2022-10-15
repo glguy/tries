@@ -203,10 +203,8 @@ mergeWithKey = trieMergeWithKey
 -- at the given key, if one exists, and should return a value to insert at
 -- that location, or 'Nothing' to delete from that location.
 alter :: TrieKey k => k -> (Maybe a -> Maybe a) -> Trie k a -> Trie k a
-alter k f t =
-  case f (lookup k t) of
-    Just v' -> insert k v' t
-    Nothing -> delete k t
+alter = trieAlter
+{-# INLINE alter #-}
 
 -- | Insert a value at the given key. The combining function is used
 -- when a value is already stored at that key. The new value is the
