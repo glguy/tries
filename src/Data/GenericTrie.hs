@@ -83,7 +83,6 @@ module Data.GenericTrie
   , OrdKey(..)
   ) where
 
-import Control.Applicative (Applicative)
 import Data.List (foldl')
 import Data.Maybe (isNothing, isJust)
 import Prelude hiding (lookup, null, filter)
