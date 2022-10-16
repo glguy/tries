@@ -81,6 +81,8 @@ module Data.GenericTrie
 
   -- * Keys using 'Ord'
   , OrdKey(..)
+  , EnumKey(..)
+  , IntLikeKey(..)
   ) where
 
 import Data.List (foldl')
