@@ -1,5 +1,5 @@
 name:                generic-trie
-version:             0.3.2
+version:             0.4
 synopsis:            A map, where the keys may be complex structured data.
 description:         This type implements maps where the keys are themselves
                      complex structured data.  For example, the keys may be
