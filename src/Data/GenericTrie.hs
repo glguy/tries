@@ -32,7 +32,6 @@ module Data.GenericTrie
   -- * Trie interface
     Trie
   , TrieKey
-  , ShowTrieKey
 
   -- ** Construction
   , empty
@@ -85,9 +84,10 @@ module Data.GenericTrie
   , IntLikeKey(..)
   ) where
 
+import Prelude ()
+import Data.GenericTrie.Prelude hiding (lookup, null, filter)
 import Data.List (foldl')
 import Data.Maybe (isNothing, isJust)
-import Prelude hiding (lookup, null, filter)
 
 import Data.GenericTrie.Internal
 

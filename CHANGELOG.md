@@ -1,3 +1,14 @@
+0.4
+-----
+
+* Enable `TrieKey` to be derived using `DerivingVia`.
+* Add `EnumKey` and `IntLikeKey` newtypes to derive `TrieKey` using `Enum` and
+  `Integral` instances, respectively.
+* Don't export `ShowTrieKey` from the public module.
+* Fix up `ShowTrieKey` for `Char`.
+* Drop support for GHC 7.8 for now. If someone truly needs it, we can
+  bring it back, but at substantial cost.
+
 0.3.2
 -----
 

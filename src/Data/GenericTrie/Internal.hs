@@ -67,6 +67,7 @@ import qualified Data.Traversable as Traversable
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 import Prelude
+import Data.GenericTrie.Prelude
 #if MIN_VERSION_base(4,8,0)
 import Data.Void (Void)
 #endif
@@ -289,6 +290,8 @@ instance ShowTrieKey Int where
 #if __GLASGOW_HASKELL__ >= 806
 deriving via OrdKey Integer
   instance TrieKey Integer
+deriving via OrdKey Integer
+  instance ShowTrieKey Integer
 #else
 instance TrieKey Integer where
   type TrieRep Integer              = Map Integer
@@ -328,11 +331,11 @@ instance TrieKey Integer where
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
-#endif
 
 instance ShowTrieKey Integer where
   trieShowsPrec p (MkTrie x)        = showsPrec p x
   {-# INLINABLE trieShowsPrec #-}
+#endif
 
 #if MIN_VERSION_base(4,8,0)
 -- | 'Natural' tries are implemented with 'Map'.
@@ -435,6 +438,11 @@ instance Integral k => TrieKey (IntLikeKey k) where
   {-# INLINABLE trieMergeWithKey #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
 
+instance (Integral k, Show k) => ShowTrieKey (IntLikeKey k) where
+  trieShowsPrec p (MkTrie x) =
+    showParen (p > 10) (showString "fromList " . shows [(fromIntegral k :: k, v) | (k,v) <- IntMap.toList x])
+  {-# INLINABLE trieShowsPrec #-}
+
 -- | 'Word' tries are implemented with 'IntMap'.
 #if __GLASGOW_HASKELL__ >= 806
 deriving via IntLikeKey Word
@@ -486,6 +494,8 @@ instance ShowTrieKey Word where
 #if __GLASGOW_HASKELL__ >= 806
 deriving via EnumKey Char
   instance TrieKey Char
+deriving via EnumKey Char
+  instance ShowTrieKey Char
 #else
 instance TrieKey Char where
   type TrieRep Char                 = IntMap
@@ -522,11 +532,12 @@ instance TrieKey Char where
   {-# INLINABLE trieMap #-}
   {-# INLINABLE trieMergeWithKey #-}
   {-# INLINABLE trieMapMaybeWithKey #-}
-#endif
 
 instance ShowTrieKey Char where
-  trieShowsPrec p (MkTrie x)        = showsPrec p x
+  trieShowsPrec p (MkTrie x) =
+    showParen (p > 10) (showString "fromList " . shows [(toEnum k :: Char, v) | (k,v) <- IntMap.toList x])
   {-# INLINABLE trieShowsPrec #-}
+#endif
 
 -- | Tries indexed by 'OrdKey' will be represented as an ordinary 'Map'
 -- and the keys will be compared based on the 'Ord' instance for @k@.
@@ -641,7 +652,8 @@ instance Enum k => TrieKey (EnumKey k) where
   {-# INLINABLE trieMapMaybeWithKey #-}
 
 instance (Show k, Enum k) => ShowTrieKey (EnumKey k) where
-  trieShowsPrec p (MkTrie x)            = showsPrec p x
+  trieShowsPrec p (MkTrie x) =
+    showParen (p > 10) (showString "fromList " . shows [(toEnum k :: k, v) | (k,v) <- IntMap.toList x])
   {-# INLINABLE trieShowsPrec #-}
 
 ------------------------------------------------------------------------------
