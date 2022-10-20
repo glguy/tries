@@ -3,8 +3,8 @@
 -- | This hideous module lets us avoid dealing with the fact that
 -- various functions haven't always been exported from the standard
 -- Prelude.
-module Prelude
-  ( module Prel
+module Data.GenericTrie.Prelude
+  ( module Prelude
 #if !MIN_VERSION_base(4,18,0)
   , Applicative (..)
 #endif
@@ -20,7 +20,6 @@ module Prelude
   )
   where
 
-import "base" Prelude as Prel
 #if !MIN_VERSION_base(4,18,0)
 import Control.Applicative (Applicative (..))
 #endif
